@@ -6,11 +6,11 @@ import FormControlLabel from '@mui/material/FormControlLabel';
 import { useLocation } from 'react-router-dom';
 // import { useNavigate } from 'react-router-dom';
 import dataToServerModes from '../utils/dataToServerModes'
-import AlertDialog from './ErrorAlert'
+import AlertDialog from './Others/ErrorAlert'
 import { styles } from '../styles';
 import GLOBAL from '../GLOBAL';
-import PlotlyPlot from './PlotV2';
-import LinearBuffer from './Loading';
+import PlotlyPlot from './Plots/PlotV2';
+import LinearBuffer from './Others/Loading';
 
 const serverAddress = GLOBAL.serverAddress;
 function ModeAnalysis() {

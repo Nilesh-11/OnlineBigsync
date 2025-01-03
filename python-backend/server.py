@@ -17,6 +17,12 @@ from typing import List
 from algos.Algorithms.window_selection import windowSelection
 from algos.Algorithms.Prony.prony3 import pronyAnalysis
 from algos.Algorithms.OSLP.main import oslp_main
+
+import os
+from client import *
+
+dbUser=None
+user=None
 app = FastAPI()
 
 # Allow requests from all origins
@@ -62,12 +68,35 @@ class OSLPSettings(BaseModel):
     }
 }
     points:List[float]
-    
 
+class ServerInfoSettings(BaseModel):
+    ip: str
+    port: int
+    
 @app.get("/")
 def index():
     return {"message": "Welcome to the API"}
 
+@app.get("/live-server")
+async def connect_to_server(event_settings: ServerInfoSettings):
+    if not event_settings.ip or not event_settings.port:
+        raise HTTPException(status_code=400, detail="Bad request from the client")
+    ip = event_settings.ip
+    port = event_settings.port
+    print(f"Connecting to server at {ip}:{port}")
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.connect((ip, port))
+        return {
+            "status": "success",
+            "message": f"Connected to {ip}:{port}"
+        }, 200
+    except Exception as e:
+        print(f"Error: failed to connect{e}")
+    return {
+            "status": "failed",
+            "message": f"Failed to connect"
+        }, 500
 
 @app.post("/v2/classify-event")
 async def classify_event_data(event_settings: EventClassificationSettings):
@@ -83,7 +112,6 @@ async def classify_event_data(event_settings: EventClassificationSettings):
 async def detect_event(event_settings: EventDetectionSettings):
     if not event_settings.time or not event_settings.data:
         raise HTTPException(status_code=400, detail="Bad request from the client")
-
     res = eventDetection(
         event_settings.data, event_settings.time,
         float(event_settings.windowSize),

@@ -5,7 +5,7 @@ import FileInput from './v-1/FileInput'
 import { useNavigate } from 'react-router-dom';
 import parseCSV from '../utils/parseCSV';
 import formatData from '../utils/formatData';
-import LinearBuffer from './Loading'
+import LinearBuffer from './Others/Loading'
 
 const imageStyles = {
   width: '200px',

@@ -5,14 +5,14 @@ import FormGroup from '@mui/material/FormGroup';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import { useLocation } from 'react-router-dom';
 // import AnalysePlot from './Plot_Analyse&Detect';
-import PlotlyPlotOSLP from './PlotOSLP';
+import PlotlyPlotOSLP from './Plots/PlotOSLP';
 // import { useNavigate } from 'react-router-dom';
 import dataToServerOSLP from '../utils/dataToServerOSLP'
-import AlertDialog from './ErrorAlert'
+import AlertDialog from './Others/ErrorAlert'
 import { styles } from '../styles';
 import GLOBAL from '../GLOBAL';
-import MessageDialog from './MessageDialog';
-import LinearBuffer from './Loading';
+import MessageDialog from './Others/MessageDialog';
+import LinearBuffer from './Others/Loading';
 
 
 const serverAddress = GLOBAL.serverAddress;

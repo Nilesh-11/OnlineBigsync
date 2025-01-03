@@ -24,7 +24,7 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom';
 import formatData from '../utils/formatData';
 import parseCSV from '../utils/parseCSV';
-import LinearBuffer from './Loading';
+import LinearBuffer from './Others/Loading';
 import { styles } from '../styles';
 const Navabar = (props) => {
   const navigate = useNavigate();
@@ -83,7 +83,7 @@ const Navabar = (props) => {
   const [state, setState] = useState({
     left: false,
   });
-  const icons = [<HomeIcon />, <TimelineIcon />, <QueryStatsIcon />, <AnalyticsIcon />, <PlaceIcon />]
+  const icons = [<HomeIcon />, <TimelineIcon />, <QueryStatsIcon />, <AnalyticsIcon />, <PlaceIcon />, <MenuIcon />]
   // Define the toggleDrawer function
   const toggleDrawer = (open) => (event) => {
     if (event.type === 'keydown' && (event.key === 'Tab' || event.key === 'Shift')) {
@@ -106,7 +106,8 @@ const Navabar = (props) => {
           { text: 'Analyse and Detect', href: '/analyse' },
           { text: 'Baseline', href: '/baseline' },
           { text: 'Oscillation Characterisation', href: '/oscillation-characterisation' },
-          { text: 'Oscillation Source Location', href: '/oscillation-source-location' }
+          { text: 'Oscillation Source Location', href: '/oscillation-source-location' },
+          { text: 'Connect to server', href: '/live-server' }
           
         ].map((item, index) => (
           <ListItem key={item.text} disablePadding>

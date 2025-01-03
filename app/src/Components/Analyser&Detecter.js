@@ -4,14 +4,14 @@ import { Checkbox, Grid, Typography, Button, Alert } from '@mui/material';
 import FormGroup from '@mui/material/FormGroup';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import { useLocation } from 'react-router-dom';
-import AnalysePlot from './Plot_Analyse&Detect';
-import PlotlyPlot from './PlotV2';
+import AnalysePlot from './Plots/Plot_Analyse&Detect';
+import PlotlyPlot from './Plots/PlotV2';
 import { useNavigate } from 'react-router-dom';
-import DiscreteSlider from './Slider';
-import dataToServer from '../utils/dataToServer'
+import DiscreteSlider from './Others/Slider';
+import dataToServer from '../utils/dataToServer';
 import classifyEventData from '../utils/classifyEventV2';
-import ThresholdForm from './ThresholdForm';
-import AlertDialog from './ErrorAlert'
+import ThresholdForm from './Others/ThresholdForm';
+import AlertDialog from './Others/ErrorAlert'
 import { styles } from '../styles';
 import GLOBAL from '../GLOBAL';
 

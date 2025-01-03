@@ -4,13 +4,15 @@ import NavBar from './Components/Topnav'
 import DetectEvent from './Components/v-1/DetectEvent'
 import { createTheme, useTheme, ThemeProvider } from '@mui/material/styles';
 import Paper from '@mui/material/Paper';
-import Home from './Components/Home'
+import Home from './Components/Home';
+import Live from './Components/OnlineData/Live';
 import Classify from './Components/ClassifyEvent'
 import Analyser from './Components/Analyser&Detecter';
 import Baseliner from './Components/Baseliner';
 import ModeAnalysis from './Components/Modes';
 import { indigo, purple } from '@mui/material/colors';
 import OSLP from './Components/OSLP'
+import IpPortForm from './Components/OnlineData/LiveAnalyser'
 
 function App() {
   
@@ -38,6 +40,8 @@ function App() {
               <Route path="/baseline" element={<Baseliner></Baseliner>}></Route>
               <Route path="/oscillation-characterisation" element={<ModeAnalysis></ModeAnalysis>}></Route>
               <Route path="/oscillation-source-location" element={<OSLP></OSLP>}></Route>
+              <Route path="/live-server" element={<Live></Live>}></Route>
+              <Route path="/live-analysis" element={<IpPortForm></IpPortForm>}></Route>
             </Routes>
           </BrowserRouter>
         </div>
