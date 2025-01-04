@@ -1,5 +1,5 @@
 import React, { Component } from 'react';
-import CustomSnackbar from './Helpers/Snackbar';
+import CustomSnackbar from './../Common/Snackbar';
 class ErrorBoundary extends Component {
   constructor(props) {
     super(props);

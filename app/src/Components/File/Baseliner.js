@@ -6,11 +6,11 @@ import FormGroup from '@mui/material/FormGroup';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import { useLocation } from 'react-router-dom';
 // import { useNavigate } from 'react-router-dom';
-import dataToServer from '../utils/dataToServer'
-import AlertDialog from './Others/ErrorAlert'
-import MyBarChart from './Plots/Barchart';
-import { styles } from '../styles';
-import GLOBAL from '../GLOBAL';
+import dataToServer from './../../utils/dataToServer'
+import AlertDialog from './../Common/ErrorAlert'
+import MyBarChart from './../Plots/Barchart';
+import { styles } from './../../styles';
+import GLOBAL from './../../GLOBAL';
 const serverAddress = GLOBAL.serverAddress;
 function Baseliner() {
     // ------------ Getting csv Data -----------------//

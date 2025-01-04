@@ -4,13 +4,12 @@ import { Checkbox, Grid, Typography, Button, Alert } from '@mui/material';
 import FormGroup from '@mui/material/FormGroup';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import { useLocation } from 'react-router-dom';
-// import { useNavigate } from 'react-router-dom';
-import dataToServerModes from '../utils/dataToServerModes'
-import AlertDialog from './Others/ErrorAlert'
-import { styles } from '../styles';
-import GLOBAL from '../GLOBAL';
-import PlotlyPlot from './Plots/PlotV2';
-import LinearBuffer from './Others/Loading';
+import dataToServerModes from './../../utils/dataToServerModes'
+import AlertDialog from './../Common/ErrorAlert'
+import { styles } from './../../styles';
+import GLOBAL from './../../GLOBAL';
+import PlotlyPlot from './../Plots/PlotV2';
+import LinearBuffer from './../Common/Loading';
 
 const serverAddress = GLOBAL.serverAddress;
 function ModeAnalysis() {

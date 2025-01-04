@@ -4,16 +4,16 @@ import { Checkbox, Grid, Typography, Button, Alert } from '@mui/material';
 import FormGroup from '@mui/material/FormGroup';
 import FormControlLabel from '@mui/material/FormControlLabel';
 import { useLocation } from 'react-router-dom';
-import AnalysePlot from './Plots/Plot_Analyse&Detect';
-import PlotlyPlot from './Plots/PlotV2';
+import AnalysePlot from '../Plots/Plot_Analyse&Detect';
+import PlotlyPlot from '../Plots/PlotV2';
 import { useNavigate } from 'react-router-dom';
-import DiscreteSlider from './Others/Slider';
-import dataToServer from '../utils/dataToServer';
-import classifyEventData from '../utils/classifyEventV2';
-import ThresholdForm from './Others/ThresholdForm';
-import AlertDialog from './Others/ErrorAlert'
-import { styles } from '../styles';
-import GLOBAL from '../GLOBAL';
+import DiscreteSlider from '../Common/Slider';
+import dataToServer from '../../utils/dataToServer';
+import classifyEventData from '../../utils/classifyEventV2';
+import ThresholdForm from '../Common/ThresholdForm';
+import AlertDialog from '../Common/ErrorAlert'
+import { styles } from '../../styles';
+import GLOBAL from '../../GLOBAL';
 
 const serverAddress = GLOBAL.serverAddress;
 function Analyser() {

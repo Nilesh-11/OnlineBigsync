@@ -1,18 +1,24 @@
+// Module imports
 import * as React from 'react';
 import { BrowserRouter, Route, Routes } from 'react-router-dom';
-import NavBar from './Components/Topnav'
-import DetectEvent from './Components/v-1/DetectEvent'
 import { createTheme, useTheme, ThemeProvider } from '@mui/material/styles';
 import Paper from '@mui/material/Paper';
-import Home from './Components/Home';
-import Live from './Components/OnlineData/Live';
-import Classify from './Components/ClassifyEvent'
-import Analyser from './Components/Analyser&Detecter';
-import Baseliner from './Components/Baseliner';
-import ModeAnalysis from './Components/Modes';
 import { indigo, purple } from '@mui/material/colors';
-import OSLP from './Components/OSLP'
-import IpPortForm from './Components/OnlineData/LiveAnalyser'
+// Home Page imports
+import ErrorPage from './Components/ErrorPage';
+import Home from './Components/Home';
+// Offline Data imports
+import NavBar from './Components/File/Topnav';
+import DetectEvent from './Components/v-1/DetectEvent';
+import FileHome from './Components/File/Home';
+import Classify from './Components/File/ClassifyEvent';
+import Analyser from './Components/File/Analyser&Detecter';
+import Baseliner from './Components/File/Baseliner';
+import ModeAnalysis from './Components/File/Modes';
+import OSLP from './Components/File/OSLP'
+// Online Data imports
+import LiveDash from './Components/OnlineData/LiveDashboard'
+import LiveHome from './Components/OnlineData/LiveHome';
 
 function App() {
   
@@ -34,14 +40,16 @@ function App() {
           <NavBar props={[colorMode,setColorMode]}></NavBar>
             <Routes>
               <Route path="/" element={<Home ></Home>}></Route>
+              <Route path="/error-page" element={<ErrorPage></ErrorPage>}></Route>
+              <Route path="/file-home" element={<FileHome ></FileHome>}></Route>
               <Route path="/analyse" element={<Analyser></Analyser>}></Route>
               <Route path="/detect-event" element={<DetectEvent></DetectEvent>}></Route>
               <Route path="/classify-event" element={<Classify></Classify>}></Route>
               <Route path="/baseline" element={<Baseliner></Baseliner>}></Route>
               <Route path="/oscillation-characterisation" element={<ModeAnalysis></ModeAnalysis>}></Route>
               <Route path="/oscillation-source-location" element={<OSLP></OSLP>}></Route>
-              <Route path="/live-server" element={<Live></Live>}></Route>
-              <Route path="/live-analysis" element={<IpPortForm></IpPortForm>}></Route>
+              <Route path="/live-dashboard" element={<LiveDash></LiveDash>}></Route>
+              <Route path="/live-home" element={<LiveHome></LiveHome>}></Route>
             </Routes>
           </BrowserRouter>
         </div>

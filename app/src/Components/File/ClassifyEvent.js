@@ -1,8 +1,8 @@
 import * as React from 'react';
 import Alert from '@mui/material/Alert';
-import EventTable from './EventTable'
+import EventTable from './../Common/EventTable'
 import { useLocation,useNavigate } from 'react-router-dom';
-import { styles } from '../styles';
+import { styles } from './../../styles';
 export default function ClassifyGrid() {
     const location = useLocation();
     const navigate = useNavigate();

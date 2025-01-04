@@ -1,6 +1,10 @@
 import React, { useState } from 'react';
 import { TextField, Button, Grid, Typography, Container, Box } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
+import GLOBAL from '../../GLOBAL';
+import connectToServer from '../../utils/liveServerConnect'
+
+const serverAddress = GLOBAL.serverAddress;
 
 const imageStyles = {
     width: '200px',
@@ -8,21 +12,28 @@ const imageStyles = {
     transition: 'transform 0.5s ease', // Add a smooth transition
 };
 
-const IpPortForm = () => {
+const LandingPage = () => {
   const [ip, setIp] = useState('');
   const [port, setPort] = useState('');
   const navigate = useNavigate();
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!ip || !port) {
       alert("IP and Port are required.");
       return;
     }
-    console.log("IP Address:", ip);
-    console.log("Port:", port);
-    // setTimeout(() => {
-    //     navigate('/live-analysis');
-    // }, 2000);
+
+    const responseData = await connectToServer([ip, port], serverAddress + 'connect-server', navigate);
+    if (responseData.status == "success"){
+        setTimeout(() => {
+            navigate('/live-dashboard');
+        }, 500);
+    }
+    else{
+        setTimeout(() => {
+            navigate('/error-page');
+        }, 500);
+    }
   };
 
   return (
@@ -86,4 +97,4 @@ const IpPortForm = () => {
   );
 };
 
-export default IpPortForm;
+export default LandingPage;

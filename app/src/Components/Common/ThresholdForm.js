@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import TextField from '@mui/material/TextField';
 import Typography from '@mui/material/Typography';
 import Button from '@mui/material/Button';
-import { styles } from '../../styles';
+import { styles } from './../../styles';
 
 function ThresholdForm({ values, setValues, setReadyToCheckEvents }) {
   const [errors, setErrors] = useState({

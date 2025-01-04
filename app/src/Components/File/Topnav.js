@@ -22,10 +22,11 @@ import TimelineIcon from '@mui/icons-material/Timeline';
 import HomeIcon from '@mui/icons-material/Home';
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom';
-import formatData from '../utils/formatData';
-import parseCSV from '../utils/parseCSV';
-import LinearBuffer from './Others/Loading';
-import { styles } from '../styles';
+import formatData from './../../utils/formatData';
+import parseCSV from './../../utils/parseCSV';
+import LinearBuffer from './../Common/Loading';
+import { styles } from './../../styles';
+
 const Navabar = (props) => {
   const navigate = useNavigate();
   const currentPath = window.location.pathname;
@@ -64,7 +65,6 @@ const Navabar = (props) => {
 
 
       } catch (error) {
-        
         console.error('Error:', error);
       }
     }

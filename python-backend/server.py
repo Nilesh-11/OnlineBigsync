@@ -17,12 +17,14 @@ from typing import List
 from algos.Algorithms.window_selection import windowSelection
 from algos.Algorithms.Prony.prony3 import pronyAnalysis
 from algos.Algorithms.OSLP.main import oslp_main
-
-import os
 from client import *
 
-dbUser=None
+import threading
+from dotenv import load_dotenv
+load_dotenv()
+
 user=None
+user_thread = None
 app = FastAPI()
 
 # Allow requests from all origins
@@ -32,7 +34,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 class EventDetectionSettings(BaseModel):
     time : List[float]
@@ -44,7 +45,7 @@ class EventClassificationSettings(BaseModel):
     time: List[float]
     data: List[float]
     thresholdValues: Dict[str, float]
-    
+
 class IslandingEventClassificationSettings(BaseModel):
     time: List[float]
     data: List[List[float]]
@@ -73,20 +74,28 @@ class ServerInfoSettings(BaseModel):
     ip: str
     port: int
     
+class ServerInterruptSettings(BaseModel):
+    action: int
+    msg: str
+
 @app.get("/")
 def index():
     return {"message": "Welcome to the API"}
 
-@app.get("/live-server")
+@app.post("/connect-server")
 async def connect_to_server(event_settings: ServerInfoSettings):
+    global user_thread
+    global user
     if not event_settings.ip or not event_settings.port:
         raise HTTPException(status_code=400, detail="Bad request from the client")
+
     ip = event_settings.ip
     port = event_settings.port
-    print(f"Connecting to server at {ip}:{port}")
+    user = client(ip, port)
+    user_thread = threading.Thread(target=user.receive)
+
     try:
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.connect((ip, port))
+        user_thread.start()
         return {
             "status": "success",
             "message": f"Connected to {ip}:{port}"
@@ -95,7 +104,31 @@ async def connect_to_server(event_settings: ServerInfoSettings):
         print(f"Error: failed to connect{e}")
     return {
             "status": "failed",
-            "message": f"Failed to connect"
+            "message": "Failed to connect"
+        }, 500
+
+@app.post("/action-server")
+async def action_to_server(event_settings: ServerInterruptSettings):
+    if not event_settings.action or not event_settings.msg:
+        raise HTTPException(status_code=400, detail="Bad request from the client")
+    
+    global user
+    global user_thread
+    
+    try:
+        user.interrupt_action = event_settings.action
+        user.interrupt_msg = event_settings.msg
+        user.interrupt_event.set()
+        if user.interrupt_action == interruptType.CLOSE_CONN.value:
+            user_thread.join()
+        return {
+            "status":"success",
+            "message": "Interrupt was succesfully executed."
+        }, 200
+    except:
+        return {
+            "status": "failed",
+            "message": "Failed to execute."
         }, 500
 
 @app.post("/v2/classify-event")
