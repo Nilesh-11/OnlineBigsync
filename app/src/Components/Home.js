@@ -1,5 +1,5 @@
 import React from "react";
-import { BrowserRouter as Router, Route, Routes, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
 const HomePage = () => {
   const navigate = useNavigate();
@@ -12,6 +12,9 @@ const HomePage = () => {
       </button>
       <button onClick={() => navigate("/live-home")} style={{ margin: "10px", padding: "10px 20px" }}>
         Connect to server
+      </button>
+      <button onClick={() => navigate("/test")} style={{ margin: "10px", padding: "10px 20px" }}>
+        Test
       </button>
     </div>
   );

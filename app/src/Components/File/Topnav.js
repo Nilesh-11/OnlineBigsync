@@ -107,7 +107,7 @@ const Navabar = (props) => {
           { text: 'Baseline', href: '/baseline' },
           { text: 'Oscillation Characterisation', href: '/oscillation-characterisation' },
           { text: 'Oscillation Source Location', href: '/oscillation-source-location' },
-          { text: 'Connect to server', href: '/live-server' }
+          { text: 'Connect to server', href: '/live-home' }
           
         ].map((item, index) => (
           <ListItem key={item.text} disablePadding>

@@ -19,6 +19,7 @@ import OSLP from './Components/File/OSLP'
 // Online Data imports
 import LiveDash from './Components/OnlineData/LiveDashboard'
 import LiveHome from './Components/OnlineData/LiveHome';
+import Test from './Components/test'
 
 function App() {
   
@@ -50,6 +51,7 @@ function App() {
               <Route path="/oscillation-source-location" element={<OSLP></OSLP>}></Route>
               <Route path="/live-dashboard" element={<LiveDash></LiveDash>}></Route>
               <Route path="/live-home" element={<LiveHome></LiveHome>}></Route>
+              <Route path="/test" element={<Test></Test>}></Route>
             </Routes>
           </BrowserRouter>
         </div>

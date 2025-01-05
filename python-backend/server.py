@@ -82,6 +82,15 @@ class ServerInterruptSettings(BaseModel):
 def index():
     return {"message": "Welcome to the API"}
 
+@app.get("/conn-details")
+async def conn_details():
+    return {
+        "status": "success",
+        "status_code": 200,
+        "message": "connection is established",
+        "data": None
+    }
+
 @app.post("/connect-server")
 async def connect_to_server(event_settings: ServerInfoSettings):
     global user_thread
