@@ -2,38 +2,41 @@ import time
 import psycopg2
 from psycopg2 import sql, DatabaseError
 from contextlib import contextmanager
+
+import psycopg2.pool
 from Utils.utils import *
 from Utils.dbInfo import *
 
 class DatabaseManager:
     def __init__(self, dbname, user, password, host='localhost', port='5432'):
         """Initialize the database manager with connection parameters."""
+        self.row_limit = 5
         self.dbname = dbname
         self.user = user
         self.password = password
         self.host = host
         self.port = port
         self.init_query = init_query
-        
         self.data_column_names = [name.lower() for name in parse_column_detail(data_table_details)]
         self.config_column_names = [name.lower() for name in parse_column_detail(config_table_details)]
+        self.connection_pool = psycopg2.pool.SimpleConnectionPool( minconn=1, maxconn=30, 
+                                                                    dbname=self.dbname,
+                                                                    user=self.user,
+                                                                    password=self.password,
+                                                                    host=self.host,
+                                                                    port=self.port
+                                                                )
 
     def run(self):
-        self.execute_query(self.init_query)
+        # self.execute_query(self.init_query)
         self.create_table(config_table_name, self.config_column_names, config_table_details)
         self.create_table(data_table_name, self.data_column_names, data_table_details)
-        time.sleep(3)
+        time.sleep(1)
 
     def _connect(self):
         """Private method to establish a database connection."""
         try:
-            connection = psycopg2.connect(
-                dbname=self.dbname,
-                user=self.user,
-                password=self.password,
-                host=self.host,
-                port=self.port
-            )
+            connection = self.connection_pool.getconn()
             return connection
         except DatabaseError as e:
             print(f"Error while connecting to database: {e}")
@@ -58,7 +61,7 @@ class DatabaseManager:
             if cursor:
                 cursor.close()
             if connection:
-                connection.close()
+                self.connection_pool.putconn(connection)  # Return the connection to the pool
 
     def execute_query(self, query, params=None):
         """Execute a simple query like INSERT, UPDATE, or DELETE."""
@@ -95,15 +98,15 @@ class DatabaseManager:
             """
             
             table_exists = True if table_name in [names[0] for names in self.fetch_all(check_table_query)] else False
-            
+
             if table_exists:
                 print(f"Table '{table_name}' already exists. Checking columns...")
 
                 # Check if columns match
                 check_columns_query = f"""
-                    SELECT column_name 
-                    FROM information_schema.columns 
-                    WHERE table_name = %s;
+                    SELECT column_name
+                    FROM information_schema.columns
+                    WHERE table_name = '{table_name}' AND table_schema = 'public';
                 """
                 existing_column_names = [names[0] for names in self.fetch_all(check_columns_query, (table_name,))]
 
@@ -124,36 +127,44 @@ class DatabaseManager:
             print(f"Error creating table '{table_name}': {e}")
 
     def store_frame(self, datas, frame_type):
-        if frame_type == 0:
-            tableName = data_table_name
-            columnNames = self.data_column_names
-        elif frame_type & 2 != 0 or frame_type == 5:
-            tableName = config_table_name
-            columnNames = self.config_column_names
-        else:
-            raise NotImplementedError(f"No method to store the frame type {frame_type}.")
-        
-        placeholders = [f"%s" for _ in range(len(columnNames))]
-        
-        assert len(columnNames) == len(datas[0]), f"Number of columns({len(columnNames)}) does not matches with data({len(data[0])})"
-        cNames = columnNames
-        columnNames = ', '.join(columnNames)
-        placeholders = ', '.join(placeholders)
+        for i in range(len(datas)):
+            data = datas[i]
+            if frame_type[i] == 0:
+                tableName = data_table_name
+                columnNames = self.data_column_names[1:]
+            elif frame_type[i] & 2 != 0 or frame_type[i] == 5:
+                tableName = config_table_name
+                columnNames = self.config_column_names[1:]
+            else:
+                raise NotImplementedError(f"No method to store the frame type {frame_type}.")
+                    
+            assert len(columnNames) == len(datas[i]), f"Number of columns({len(columnNames)}) does not matches with data({len(data[0])})"
 
-        for data in datas:
-            row = []
+            values = []
             for i in range(len(data)):
-                if cNames[i] == 'phasors':
+                if columnNames[i] == 'phasors':
                     res = format_phasor_type_array(data[i])
-                elif cNames[i] == 'phasorunit':
+                elif columnNames[i] == 'phasorunit':
                     res = format_phasor_unit_type_array(data[i])
-                elif cNames[i] == 'analogunit':
+                elif columnNames[i] == 'analogunit':
                     res = format_analog_unit_type_array(data[i])
-                elif cNames[i] == 'digitalunit':
+                elif columnNames[i] == 'digitalunit':
                     res = format_digital_unit_type_array(data[i])
                 else:
                     res = f'\'' + convert_to_postgres_datatype(data[i]) + f'\''
-                row.append(res)
-            values = ','.join(row)
-            query = f"INSERT INTO {tableName} ({columnNames}) VALUES ({values});"
+                values.append(res)
+            
+            query = f"INSERT INTO {tableName} ({', '.join(columnNames)}) VALUES ({','.join(values)});"
             self.execute_query(query)
+    
+    def get_dataframes(self, identifier):
+        query = f'''
+        SELECT * 
+        FROM {data_table_name}
+        WHERE identifier = '"{identifier}"'
+        ORDER BY soc DESC
+        LIMIT {self.row_limit}
+        '''
+        print(query)
+        data = self.fetch_all(query)
+        return data

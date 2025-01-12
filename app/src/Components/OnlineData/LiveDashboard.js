@@ -1,4 +1,4 @@
-import { Container, IconButton} from '@mui/material';
+import { Box, Container, IconButton} from '@mui/material';
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GLOBAL from '../../GLOBAL';
@@ -11,13 +11,14 @@ import InsightsIcon from '@mui/icons-material/Insights';
 const serverAddress = GLOBAL.serverAddress;
 
 const DashType = {
-    0: "ConnectionDash",
-    1: "AnalysisDash"
+    "ConnectionDash": 0,
+    "AnalysisDash": 1
 };
 
 const LiveDashboard = () => {
     const navigate = useNavigate();
-    const currDash = useState(0);
+    const [currIcon, setCurrIcon] = useState(<HubIcon />)
+    const [currDash, setCurrDash] = useState(0);
     const [data, setData] = useState(); 
 
     useEffect(() =>{
@@ -38,16 +39,21 @@ const LiveDashboard = () => {
         }, 1000);
         return () => clearInterval(interval)
     }, []);
-
-    const handleSwitchbutton = () =>{
+    const handleIconbutton = () =>{
         
     };
 
     return (
         <Container maxWidth="sm">
-            <IconButton aria-label='connDash' onClick={handleSwitchbutton}>
-                <HubIcon />
-            </IconButton>
+            <Box>
+                <IconButton aria-label='connDash' onClick={handleIconbutton(currDash)}>
+                    {currIcon}
+                </IconButton>
+                {currDash === DashType.AnalysisDash && 
+                    <AnalysisDashboard />
+                }
+                {currDash === DashType.ConnectionDash && <ConnectionDashboard />}
+            </Box>
         </Container>
       );
 }

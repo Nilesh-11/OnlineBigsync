@@ -1,4 +1,4 @@
-const actionToServer = async([action_type, message=NaN], url, navigate) => {
+const actionToServer = async([action_type, message=NaN], url) => {
   console.log('serverAddress', url);
   console.log(action_type, message)
   try {
@@ -14,8 +14,8 @@ const actionToServer = async([action_type, message=NaN], url, navigate) => {
         }),
       });
       if (response.ok) {
-        const [responseData, code] = await response.json(); // Parse the response as JSON
-        if (code !== 200){
+        const responseData = await response.json(); // Parse the response as JSON
+        if (responseData.status_code !== 200){
           console.error('Error:', responseData.message)
         }
         else{

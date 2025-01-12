@@ -4,8 +4,8 @@ import { Container, Typography, Button, Box } from '@mui/material';
 import FileInput from '../v-1/FileInput'
 import { useNavigate } from 'react-router-dom';
 import parseCSV from '../../utils/parseCSV';
-import formatData from './../../utils/formatData';
-import LinearBuffer from './../Common/Loading'
+import formatData from '../../utils/formatData';
+import LinearBuffer from '../Common/Loading'
 
 const imageStyles = {
   width: '200px',

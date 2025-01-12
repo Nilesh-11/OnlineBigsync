@@ -24,6 +24,7 @@ class interruptType(Enum):
 class client(object):
     
     def __init__(self, serverIP, serverPort, data_lim=2048):
+        self.store_lim = 100
         self.data_lim = data_lim
         self.data = pd.DataFrame(columns=['Time', 'Frame type', 'Frame size', 'pmu index', 'Frequency', 'ROCOF'])
         self.ip = serverIP
@@ -39,6 +40,10 @@ class client(object):
         self.interrupt_event = threading.Event()
         self.interrupt_msg = None
         self.interrupt_action = None
+        self.datas = {
+            "data":[],
+            "type":[]
+        }
     
     def execute_interrupt(self):
         if self.interrupt_action == interruptType.SEND_DATA.value:
@@ -46,7 +51,7 @@ class client(object):
         else:
             raise NotImplementedError(f"Interrupt type({self.interrupt_action}) not implemented.")
     
-    def receive(self, time=10):
+    def receive(self):
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             client.connect((self.ip, self.port))
@@ -69,10 +74,7 @@ class client(object):
                     print("Received empty data...quitting")
                     client.close()
                     break
-                print(data)
-                # with open("example.txt", 'a') as file:
-                #     file.write(data)
-                # self.update_data(data)
+                self.update_data(data)
             except socket.error as e:
                 raise ConnectionError(f"Socket errror : {e}")
             except:
@@ -80,17 +82,18 @@ class client(object):
     
     def update_data(self, data):
         frame_type = get_frame_type(data[0:2])
-        assert not(frame_type & 2 != 0 or frame_type == 5) and self.cfg != None, "Configuration frame not found."
+
+        assert ((frame_type & 2 != 0 or frame_type == 5) or self.cfg != None), "Configuration frame not found."
+
         if frame_type == 0:
             frame = dataFrame(data, 
                               pmuinfo = self.cfg.pmus,
                               time_base = self.cfg.time_base,
                               num_pmu = self.cfg.num_pmu)
-            # save_dataFrame_csv(frame)
             data = process_dataFrame(frame, self.cfg)
         elif frame_type & 2 != 0 or frame_type == 5:
             self.cfg = cfg1(data)
-            self.cfg.identifier = generate_unique_identifier(self.addr[0], self.addr[1])
+            self.cfg.identifier = generate_unique_identifier(self.ip, self.port)
             data = process_cfg1Frame(self.cfg)
         elif frame_type == 1:
             self.header = headerFrame(data)
@@ -98,5 +101,18 @@ class client(object):
             self.command = commandFrame(data)
         else:
             raise NotImplementedError("Not a suitable frametype")
-        self.dbUser.store_frame(data, frame_type)
-  
+        
+        self.datas['data'].append(data) 
+        self.datas['type'].append(frame_type)
+
+        if len(self.datas['data']) > self.store_lim:
+            self.dbUser.store_frame(self.datas['data'], self.datas['type'])
+            self.datas['data'] = []
+            self.datas['type'] = []
+    
+    def get_dataframes(self):
+        data = self.dbUser.get_dataframes(self.cfg.identifier)
+        res = {}
+        for i in range(len(data[0])):
+            res[self.dbUser.data_column_names[i]] = [row[i] for row in data]
+        return res

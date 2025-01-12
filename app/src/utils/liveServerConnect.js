@@ -13,8 +13,8 @@ const connectToServer = async ([serverIp, serverPort], url, navigate) => {
       }),
     });
     if (response.ok) {
-      const [responseData, code] = await response.json(); // Parse the response as JSON
-      if (code !== 200) {
+      const responseData = await response.json();
+      if (responseData.status_code !== 200) {
         console.error('Error:', responseData.message);
         return { error: { message: responseData.message } };
       } else {

@@ -34,7 +34,7 @@ def process_tuples(frame, handle="phasor"):
 
 def process_dataFrame(frame, cfgFrame):
     
-    data = (frame.soc,
+    data = (frame.time,
             cfgFrame.identifier,
             frame.num_pmu,
             frame.stream_idcode,
@@ -78,7 +78,7 @@ def save_dataFrame_csv(frame, filepath=None):
     data.to_csv('./Results/output.csv')
 
 def process_cfg1Frame(cfgFrame):
-    data = (cfgFrame.soc,
+    data = (cfgFrame.time,
             cfgFrame.identifier,
             cfgFrame.frame_version,
             cfgFrame.stream_idcode,

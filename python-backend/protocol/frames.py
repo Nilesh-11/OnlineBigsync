@@ -232,6 +232,7 @@ class cfg1(commonFrame):
         super().__init__(data[0:14])
         self.get_TIME_BASE(data[14:18])
         self.get_NUM_PMU(data[18:20])
+        self.time = self.soc + self.fracsec / self.time_base
         self.pmus = []
         start = 20
         for i in range(self.num_pmu):

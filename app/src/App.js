@@ -10,7 +10,7 @@ import Home from './Components/Home';
 // Offline Data imports
 import NavBar from './Components/File/Topnav';
 import DetectEvent from './Components/v-1/DetectEvent';
-import FileHome from './Components/File/Home';
+import FileHome from './Components/File/FileHome';
 import Classify from './Components/File/ClassifyEvent';
 import Analyser from './Components/File/Analyser&Detecter';
 import Baseliner from './Components/File/Baseliner';

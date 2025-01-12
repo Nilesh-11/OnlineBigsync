@@ -18,8 +18,8 @@ from algos.Algorithms.window_selection import windowSelection
 from algos.Algorithms.Prony.prony3 import pronyAnalysis
 from algos.Algorithms.OSLP.main import oslp_main
 from client import *
-
 import threading
+import random
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -82,14 +82,33 @@ class ServerInterruptSettings(BaseModel):
 def index():
     return {"message": "Welcome to the API"}
 
+data = {
+    "frequency": [random.randint(1, 100) for i in range(100)],
+    "time": [i for i in range(100)]
+}
+
 @app.get("/conn-details")
 async def conn_details():
+
+    data['frequency'].append(random.randint(1, 100))
+    data['time'].append(len(data['time']))
+    
     return {
         "status": "success",
         "status_code": 200,
         "message": "connection is established",
-        "data": None
+        "data": data
     }
+
+@app.get('/data-server')
+async def receive_data():
+    print(user.get_dataframes())
+    res = {
+        "status": "success",
+        "status_code": 200,
+        "message": "Data received successfully."
+    }
+    return res
 
 @app.post("/connect-server")
 async def connect_to_server(event_settings: ServerInfoSettings):
@@ -105,16 +124,25 @@ async def connect_to_server(event_settings: ServerInfoSettings):
 
     try:
         user_thread.start()
-        return {
+        res = {
             "status": "success",
+            "status_code": 200,
             "message": f"Connected to {ip}:{port}"
-        }, 200
+        }
     except Exception as e:
         print(f"Error: failed to connect{e}")
-    return {
+        res = {
+                "status": "failed",
+                "status_code": 500,
+                "message": "Failed to connect"
+            }
+    except:
+        res = {
             "status": "failed",
-            "message": "Failed to connect"
-        }, 500
+            "status_code": 500,
+            "message": "An error occured"
+        }
+    return res
 
 @app.post("/action-server")
 async def action_to_server(event_settings: ServerInterruptSettings):
@@ -130,20 +158,27 @@ async def action_to_server(event_settings: ServerInterruptSettings):
         user.interrupt_event.set()
         if user.interrupt_action == interruptType.CLOSE_CONN.value:
             user_thread.join()
-        return {
+        res =  {
             "status":"success",
+            "status_code": 200,
             "message": "Interrupt was succesfully executed."
-        }, 200
+        }
     except:
-        return {
+        res = {
             "status": "failed",
+            "status_code": 500,
             "message": "Failed to execute."
-        }, 500
+        }
+        
+    return res
 
 @app.post("/v2/classify-event")
 async def classify_event_data(event_settings: EventClassificationSettings):
     if not event_settings.time or not event_settings.data or not event_settings.thresholdValues:
         raise HTTPException(status_code=400, detail="Bad request from the client")
+    # print(event_settings.data)
+    # print(event_settings.time)
+    # print(event_settings.thresholdValues)
     res = eventClassification(
         event_settings.data, event_settings.time,
         event_settings.thresholdValues,
@@ -154,6 +189,10 @@ async def classify_event_data(event_settings: EventClassificationSettings):
 async def detect_event(event_settings: EventDetectionSettings):
     if not event_settings.time or not event_settings.data:
         raise HTTPException(status_code=400, detail="Bad request from the client")
+    # print(event_settings.data)
+    # print(event_settings.time)
+    # print(event_settings.windowSize)
+    # print(event_settings.sd_th)
     res = eventDetection(
         event_settings.data, event_settings.time,
         float(event_settings.windowSize),
@@ -228,7 +267,6 @@ async def oslp_analysis(event_settings: OSLPSettings):
     # )
     return res
 
-
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request, exc):
     return {"error": "An unexpected error occurred"}
@@ -239,4 +277,4 @@ async def validation_exception_handler(request, exc):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8080)
+    uvicorn.run(app, host=os.environ.get("SERVER_IP"), port=os.environ.get("SERVER_PORT"))

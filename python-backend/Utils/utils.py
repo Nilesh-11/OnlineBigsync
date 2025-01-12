@@ -9,7 +9,6 @@ def format_phasor_type_array(arrays):
     """Formats a list of tuples as a PostgreSQL phasor_type[] array."""
     res = []
     for tupleArray in arrays:
-        print(tupleArray)
         ar = [f"({str(p[0]) if p[0] is not None else 'NULL'},{str(p[1]) if p[1] is not None else 'NULL'})" 
                 for p in tupleArray]
         res.append("ARRAY[" + ",".join(ar) + "]")
