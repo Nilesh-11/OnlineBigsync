@@ -23,54 +23,54 @@ Make sure you have the following software installed on your system:
 ## Backend Setup
 
 ### 1. Navigate to the fastAPI backend directory
-	```sh
-	cd  python-backend
-	```
+```sh
+cd  python-backend
+```
 ### 2. Install backend dependencies
-	```sh
-	pip install -r requirements.txt
-	```
+```sh
+pip install -r requirements.txt
+```
 ### 3. Configure Environment variables
-	```sh
-	DBHOST='localhost'
-	DBPORT='5432'
-	DBNAME='postgres'
-	DBUSERNAME='postgres'
-	DBPASSWORD='acoolpassword'
-	SERVER_IP='127.0.0.1'
-	SERVER_PORT=8080
-	```
+```sh
+DBHOST='localhost'
+DBPORT='5432'
+DBNAME='postgres'
+DBUSERNAME='postgres'
+DBPASSWORD='acoolpassword'
+SERVER_IP='127.0.0.1'
+SERVER_PORT=8080
+```
 
 ### 4. Start the backend server
-	```sh
-	python server.py
-	```
+```sh
+python server.py
+```
 
 ## Frontend setup
 ### 1. Navigate to react frontend directory
-	```sh
-	cd  app
-	```
+```sh
+cd  app
+```
 
 ### 2. Start the development server
-	- Install frontend dependencies
-		```sh
-		npm install
-		```
-	- Start the React development server
-		```sh
-		npm  start
-		```
+- Install frontend dependencies
+```sh
+npm install
+```
+- Start the React development server
+```sh
+npm start
+```
 
 >The react app will be accessible at http://localhost:3000
 
 ### Serve the production build
-	- Installing serve package
-		```sh
-		npm i -S serve
-		```
-	- Serving the build folder using npx
-		```sh
-		npx serve -s build
-		```
+- Installing serve package
+```sh
+npm i -S serve
+```
+- Serving the build folder using npx
+```sh
+npx serve -s build
+```
 
