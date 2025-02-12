@@ -4,8 +4,8 @@ from psycopg2 import sql, DatabaseError
 from contextlib import contextmanager
 
 import psycopg2.pool
-from Utils.utils import *
-from Utils.dbInfo import *
+from protocol.Utils.utils import *
+from protocol.Utils.dbInfo import *
 
 class DatabaseManager:
     def __init__(self, dbname, user, password, host='localhost', port='5432'):
@@ -17,9 +17,17 @@ class DatabaseManager:
         self.host = host
         self.port = port
         self.init_query = init_query
+        
         self.data_column_names = [name.lower() for name in parse_column_detail(data_table_details)]
         self.config_column_names = [name.lower() for name in parse_column_detail(config_table_details)]
-        self.connection_pool = psycopg2.pool.SimpleConnectionPool( minconn=1, maxconn=30, 
+        
+        self.impulseEvents_column_names = [name.lower() for name in parse_column_detail(impulse_events_table_details)]
+        self.oscillatoryEvents_column_names = [name.lower() for name in parse_column_detail(oscillatory_events_table_details)]
+        self.islandingEvents_column_names = [name.lower() for name in parse_column_detail(islanding_events_table_details)]
+        self.loadLossEvents_column_names = [name.lower() for name in parse_column_detail(loadLoss_events_table_details)]
+        self.genLossEvents_column_names = [name.lower() for name in parse_column_detail(genLoss_events_table_details)]
+
+        self.connection_pool = psycopg2.pool.SimpleConnectionPool( minconn=5, maxconn=30, 
                                                                     dbname=self.dbname,
                                                                     user=self.user,
                                                                     password=self.password,
@@ -29,8 +37,15 @@ class DatabaseManager:
 
     def run(self):
         # self.execute_query(self.init_query)
+        
         self.create_table(config_table_name, self.config_column_names, config_table_details)
         self.create_table(data_table_name, self.data_column_names, data_table_details)
+        self.create_table(oscillatory_events_table_name, self.oscillatoryEvents_column_names, oscillatory_events_table_details)
+        self.create_table(impulse_events_table_name, self.impulseEvents_column_names, impulse_events_table_details)
+        self.create_table(genLoss_events_table_name, self.genLossEvents_column_names, genLoss_events_table_details)
+        self.create_table(loadLoss_events_table_name, self.loadLossEvents_column_names, loadLoss_events_table_details)
+        self.create_table(islanding_events_table_name, self.islandingEvents_column_names, islanding_events_table_details)
+        
         time.sleep(1)
 
     def _connect(self):
@@ -44,7 +59,11 @@ class DatabaseManager:
 
     @contextmanager
     def get_cursor(self):
-        """Context manager for handling database cursor."""
+        """Context manager for handling database cursor.
+
+        Yields:
+            _type_: cursor to the row in table
+        """
         connection = None
         cursor = None
         try:
@@ -85,9 +104,9 @@ class DatabaseManager:
         Creates a new table in PostgreSQL if it doesn't already exist or if the column details are different.
 
         Args:
-        - table_name: Name of the table to create (string).
-        - column_names: List of column names (list of strings).
-        - column_details: Column definitions (string, e.g., "id SERIAL PRIMARY KEY, name VARCHAR(100)").
+            table_name (string): Name of the table to create (string).
+            column_names ([string]): List of column names (list of strings).
+            column_details (string): Column definitions (string, e.g., "id SERIAL PRIMARY KEY, name VARCHAR(100)").
         """
         try:
             # Check if the table exists
@@ -122,49 +141,95 @@ class DatabaseManager:
             create_table_query = f"CREATE TABLE IF NOT EXISTS {table_name} ({column_details});"
             self.execute_query(create_table_query)
             print(f"Table '{table_name}' created successfully.")
-
         except Exception as e:
             print(f"Error creating table '{table_name}': {e}")
 
     def store_frame(self, datas, frame_type):
+        """Stores the stack of frames in database
+
+        Args:
+            datas ([tuple]): 1D Array of frames
+            frame_type ([integer]): 1D Array representing frame type for each frame
+
+        Raises:
+            NotImplementedError: for invalid frame type
+        """
         for i in range(len(datas)):
             data = datas[i]
             if frame_type[i] == 0:
                 tableName = data_table_name
-                columnNames = self.data_column_names[1:]
+                columnNames = self.data_column_names
             elif frame_type[i] & 2 != 0 or frame_type[i] == 5:
                 tableName = config_table_name
-                columnNames = self.config_column_names[1:]
+                columnNames = self.config_column_names
             else:
                 raise NotImplementedError(f"No method to store the frame type {frame_type}.")
-                    
-            assert len(columnNames) == len(datas[i]), f"Number of columns({len(columnNames)}) does not matches with data({len(data[0])})"
+            
+            assert len(columnNames) == len(datas[i]), f"Number of columns({len(columnNames)}) does not matches with data({len(datas[0])})"
 
             values = []
-            for i in range(len(data)):
-                if columnNames[i] == 'phasors':
-                    res = format_phasor_type_array(data[i])
-                elif columnNames[i] == 'phasorunit':
-                    res = format_phasor_unit_type_array(data[i])
-                elif columnNames[i] == 'analogunit':
-                    res = format_analog_unit_type_array(data[i])
-                elif columnNames[i] == 'digitalunit':
-                    res = format_digital_unit_type_array(data[i])
+
+            for j in range(len(data)):
+                if columnNames[j] == 'phasors':
+                    res = format_phasor_type_array(data[j])
+                elif columnNames[j] == 'phasorunit':
+                    res = format_phasor_unit_type_array(data[j])
+                elif columnNames[j] == 'analogunit':
+                    res = format_analog_unit_type_array(data[j])
+                elif columnNames[j] == 'digitalunit':
+                    res = format_digital_unit_type_array(data[j])
+                # elif columnNames[j] == 'time':
+                #     res = format_timestamp_type(data[j])
                 else:
-                    res = f'\'' + convert_to_postgres_datatype(data[i]) + f'\''
+                    res = "\'" + convert_to_postgres_datatype(data[j]) + "\'"
                 values.append(res)
-            
             query = f"INSERT INTO {tableName} ({', '.join(columnNames)}) VALUES ({','.join(values)});"
             self.execute_query(query)
-    
-    def get_dataframes(self, identifier):
+
+    def store_events(self, data, event_type):
+        if event_type == 'oscillatory':
+            tableName = oscillatory_events_table_name
+            columnNames = self.oscillatoryEvents_column_names
+        elif event_type == 'impulse':
+            tableName = impulse_events_table_name
+            columnNames = self.impulseEvents_column_names
+        elif event_type == 'genLoss':
+            tableName = genLoss_events_table_name
+            columnNames = self.genLossEvents_column_names
+        elif event_type == 'loadLoss':
+            tableName = loadLoss_events_table_name
+            columnNames = self.loadLossEvents_column_names
+        elif event_type == 'islanding':
+            tableName = islanding_events_table_name
+            columnNames = self.islandingEvents_column_names
+        else:
+            raise NotImplementedError(f"Ambigous event type ({event_type})")
+        
+        assert len(columnNames) == len(data), f"Number of columns({len(columnNames)}) does not matches with data({len(data)})"
+        
+        values = []
+        for j in range(len(data)):
+            res = "\'" + convert_to_postgres_datatype(data[j]) + "\'"
+            values.append(res)
+        query = f"INSERT INTO {tableName} ({', '.join(columnNames)}) VALUES ({','.join(values)});"
+        self.execute_query(query)
+
+    def get_max_timestamp(self, frameIdentifier):
         query = f'''
-        SELECT * 
-        FROM {data_table_name}
-        WHERE identifier = '"{identifier}"'
-        ORDER BY soc DESC
-        LIMIT {self.row_limit}
+        select max(time)
+        from {data_table_name}
+        WHERE identifier = \'\"{frameIdentifier}\"\'
         '''
-        print(query)
+        max_timestamp = self.fetch_all(query)[0][0]
+        return max_timestamp
+    
+    def get_frequency_dataframes(self, frameIdentifier, time_window_len, timestamp):
+        query = f'''
+        SELECT time, frequency, numberofpmu, stationname
+        FROM {data_table_name}
+        WHERE identifier = \'\"{frameIdentifier}\"\'
+        AND time BETWEEN \'{timestamp}\'::timestamp - INTERVAL '{time_window_len} seconds' AND \'{timestamp}\'::timestamp
+        ORDER BY time ASC
+        '''
         data = self.fetch_all(query)
         return data

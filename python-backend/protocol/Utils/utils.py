@@ -4,6 +4,10 @@ import matplotlib.pyplot as plt
 import uuid
 import time
 import re
+import math
+
+def format_timestamp_type(data):
+    return f"\'{data}\'"
 
 def format_phasor_type_array(arrays):
     """Formats a list of tuples as a PostgreSQL phasor_type[] array."""
@@ -58,9 +62,9 @@ def convert_to_postgres_datatype(array):
     if isinstance(array, (int, float)):  # Numbers
         return str(array)
     elif isinstance(array, str):  # Strings
-        return f'"{array}"'
+        return f"\"{array}\""
     elif array is None:  # NULL values
-        return "NULL"
+        return 'NULL'
     elif isinstance(array, (list, tuple)):  # Lists and tuples
         converted_items = [convert_to_postgres_datatype(item) for item in array]
         if isinstance(array, list):
@@ -68,7 +72,7 @@ def convert_to_postgres_datatype(array):
         elif isinstance(array, tuple):
             return "(" + ",".join(converted_items) + ")"  # PostgreSQL tuple
     else:
-        return str(array)  # Fallback for other types
+        return str(array) # Fallback for other types
 
 def parse_column_detail(table_definition):
     
@@ -90,6 +94,16 @@ def generate_unique_identifier(client_address=None, client_port=None):
     
     return identifier
 
+def decode_synchrophasor_time(SOC, FRACSEC, TIME_BASE=2**24):
+    utc_time = datetime.datetime.utcfromtimestamp(SOC)
+    
+    frac_seconds = FRACSEC / TIME_BASE
+    microseconds = int(frac_seconds * 1_000_000)
+    
+    final_time = utc_time + datetime.timedelta(microseconds=microseconds)
+
+    return final_time
+
 def soc_to_dateTime(soc):
     timestamp = datetime.datetime.utcfromtimestamp(soc)
     
@@ -101,31 +115,11 @@ def soc_to_dateTime(soc):
 
     return day, month, date, year, time
 
-def plot_figure(file_path):
-    df = pd.read_csv(file_path)
-    df['Time'] = pd.to_datetime(df['Unnamed: 0'], errors='coerce')
-    df.dropna(subset=['Time'], inplace=True)
-
-    plt.figure(figsize=(12, 6))
-
-    # Plot Frequency
-    plt.subplot(2, 1, 1)
-    plt.plot(df['Time'], df['Frequency'], color='blue', label='Frequency')
-    plt.title('Frequency over Time')
-    plt.xlabel('Time')
-    plt.ylabel('Frequency (Hz)')
-    plt.grid(True)
-    plt.legend()
-
-    # Plot ROCOF
-    # plt.subplot(2, 1, 2)
-    # plt.plot(df['Time'], df['ROCOF]'], color='red', label='ROCOF')
-    # plt.title('Rate of Change of Frequency (ROCOF) over Time')
-    # plt.xlabel('Time')
-    # plt.ylabel('ROCOF')
-    # plt.grid(True)
-    # plt.legend()
-
-    # Adjust layout and show the plots
-    plt.tight_layout()
-    plt.show()
+def removeNan(arr):
+    curr = 60
+    for i in range(len(arr)):
+        if math.isnan(arr[i]) or arr[i] == 0:
+            arr[i] = curr
+        else:
+            curr = arr[i]
+    return arr

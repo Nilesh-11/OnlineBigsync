@@ -1,6 +1,6 @@
 import pandas as pd
 from pydantic import BaseModel 
-from Utils.utils import *
+from protocol.Utils.utils import *
 
 def balance_size(phr, dummy):
     mxlen = max([len(sz) for sz in phr])
@@ -59,24 +59,6 @@ def process_dataFrame(frame, cfgFrame):
             )
     return data
 
-def save_dataFrame_csv(frame, filepath=None):
-    data = pd.DataFrame(columns=['Time', 'Frame type', 'Frame size', 'pmu index', 'Frequency', 'ROCOF'])
-    rows = []
-    for i in range(len(frame.pmu_data)):
-        row = {
-            'Time':frame.time, 
-            'Frame type': frame.frame_type, 
-            'Frame size': frame.framesize, 
-            'pmu index' : i,
-            'Frequency' : frame.pmu_data[i].freq,
-            'ROCOF': frame.pmu_data[i].rocof,
-            'phr': frame.pmu_data[i].phasors[0]
-            }
-        rows.append(row)
-    rows = pd.DataFrame(rows)
-    data = pd.concat([data, rows], ignore_index=True)
-    data.to_csv('./Results/output.csv')
-
 def process_cfg1Frame(cfgFrame):
     data = (cfgFrame.time,
             cfgFrame.identifier,
@@ -99,6 +81,24 @@ def process_cfg1Frame(cfgFrame):
             [data.cfgcnt for data in cfgFrame.pmus],
             )
     return data
+
+def save_dataFrame_csv(frame, filepath=None):
+    data = pd.DataFrame(columns=['Time', 'Frame type', 'Frame size', 'pmu index', 'Frequency', 'ROCOF'])
+    rows = []
+    for i in range(len(frame.pmu_data)):
+        row = {
+            'Time':frame.time, 
+            'Frame type': frame.frame_type, 
+            'Frame size': frame.framesize, 
+            'pmu index' : i,
+            'Frequency' : frame.pmu_data[i].freq,
+            'ROCOF': frame.pmu_data[i].rocof,
+            'phr': frame.pmu_data[i].phasors[0]
+            }
+        rows.append(row)
+    rows = pd.DataFrame(rows)
+    data = pd.concat([data, rows], ignore_index=True)
+    data.to_csv('./Results/output.csv')
 
 def save_cfg1Frame():
     pass

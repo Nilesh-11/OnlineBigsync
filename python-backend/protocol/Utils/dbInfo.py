@@ -133,8 +133,7 @@ END $$;
 
 config_table_name = "configuration_frames"
 config_table_details = '''
-ID BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-SOC FLOAT,
+time timestamp,
 Identifier VARCHAR(128),
 FrameVersion INT,
 StreamID INT,
@@ -157,8 +156,7 @@ ConfigurationChangeCount INT[]
 
 data_table_name = "data_frames"
 data_table_details = '''
-ID BIGINT PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
-SOC FLOAT,
+time timestamp PRIMARY KEY,
 Identifier VARCHAR(128),
 NumberOfPMU INT,
 StreamID INT,
@@ -180,4 +178,46 @@ DataError VARCHAR(16)[],
 TimeQuality VARCHAR(16)[],
 PMUSync BOOLEAN[],
 TriggerReason VARCHAR(24)
+'''
+
+oscillatory_events_table_name = "oscillatory_events"
+oscillatory_events_table_details = '''
+Identifier VARCHAR(128),
+StationName VARCHAR(16),
+Power INT[],
+Frequency INT[],
+Time INT[]
+'''
+
+islanding_events_table_name = "islanding_events"
+islanding_events_table_details = '''
+Identifier VARCHAR(128),
+StationsCount INT,
+StationNames VARCHAR(16)[],
+Frequency INT[],
+Time INT[]
+'''
+
+genLoss_events_table_name = "genloss_events"
+genLoss_events_table_details = '''
+Identifier VARCHAR(128),
+StationName VARCHAR(16),
+Frequency INT[],
+Time INT[]
+'''
+
+loadLoss_events_table_name = "loadloss_events"
+loadLoss_events_table_details = '''
+Identifier VARCHAR(128),
+StationName VARCHAR(16),
+Frequency INT[],
+Time INT[]
+'''
+
+impulse_events_table_name = "impulse_events"
+impulse_events_table_details = '''
+Identifier VARCHAR(128),
+StationName VARCHAR(16),
+Frequency INT[],
+Time INT[]
 '''

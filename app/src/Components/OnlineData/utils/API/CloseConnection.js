@@ -1,16 +1,16 @@
 import { ConnectionErrorCode } from "./../_variable";
 
-const checkConnection = async(url) => {
+const closeConnection = async(url) => {
     try {
-        // Send the file to the server
         const response = await fetch(url, {
-            method: 'GET',
+            method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
             },
         });
         if (response.ok) {
             const responseData = await response.json(); // Parse the response as JSON
+            console.log(responseData);
             if (responseData.status_code !== 200){
                 console.error('Error:', responseData.message)
             }
@@ -25,4 +25,4 @@ const checkConnection = async(url) => {
     }
 };
 
-export default checkConnection;
+export default closeConnection;

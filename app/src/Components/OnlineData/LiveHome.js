@@ -27,9 +27,9 @@ const LandingPage = () => {
     setIsSubmitting(true);
     const responseData = await connectToServer([ip, port], serverAddress + 'connect-server', navigate);
     setIsSubmitting(false);
-
+    
     if (responseData.status === "success") {
-        navigate('/live-dashboard');
+        navigate('/live-dashboard', {state: {threshold_values: responseData.data.threshold_values, window_lens: responseData.data.window_lens}});
     } else {
         navigate('/error-page');
     }

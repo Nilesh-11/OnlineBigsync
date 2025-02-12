@@ -1,125 +1,69 @@
-// Import necessary libraries
-import React, { useState, useEffect } from 'react';
+import React from 'react';
 import { Line } from 'react-chartjs-2';
-import {
-  Chart as ChartJS,
-  LineElement,
-  CategoryScale,
-  LinearScale,
-  PointElement,
-} from 'chart.js';
+import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend } from 'chart.js';
 
-ChartJS.register(LineElement, CategoryScale, LinearScale, PointElement);
+// Register Chart.js components
+ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend);
 
-const RealTimeChart = () => {
-  const [chartData, setChartData] = useState({
-    labels: [],
+const ChartComponent = ({
+  yAxisData = [],               // Default: empty array
+  xAxisData = [],               // Default: empty array
+  title = "Live Chart",         // Default title
+  xAxisLabel = "Time",          // Default X-axis label
+  yAxisLabel = "Value",         // Default Y-axis label
+  curveColor = 'rgba(75, 192, 192, 1)', // Default curve color
+}) => {
+  const data = {
+    labels: xAxisData.length > 0 ? xAxisData : Array.from({ length: 10 }, (_, i) => i + 1), // Default X labels
     datasets: [
       {
-        label: 'Dataset 1',
-        data: [],
-        borderColor: 'rgba(75, 192, 192, 1)',
-        backgroundColor: 'rgba(75, 192, 192, 0.2)',
-        borderWidth: 2,
-        tension: 0.4,
+        label: title,
+        data: yAxisData.length > 0 ? yAxisData : Array(10).fill(50), // Default Y values
+        borderColor: curveColor,
+        backgroundColor: `${curveColor}80`,
+        fill: false,
+        tension: 0,
+        spanGaps: false,
+        pointRadius: 3,
+        pointHoverRadius: 5,
       },
     ],
-  });
-
-  const addDataset = () => {
-    setChartData((prevData) => {
-      const newDataset = {
-        label: `Dataset ${prevData.datasets.length + 1}`,
-        data: [],
-        borderColor: `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(
-          Math.random() * 255
-        )}, ${Math.floor(Math.random() * 255)}, 1)`,
-        backgroundColor: `rgba(${Math.floor(Math.random() * 255)}, ${Math.floor(
-          Math.random() * 255
-        )}, ${Math.floor(Math.random() * 255)}, 0.2)`,
-        borderWidth: 2,
-        tension: 0.4,
-      };
-      return {
-        ...prevData,
-        datasets: [...prevData.datasets, newDataset],
-      };
-    });
   };
 
-  const removeDataset = () => {
-    setChartData((prevData) => {
-      if (prevData.datasets.length > 1) {
-        return {
-          ...prevData,
-          datasets: prevData.datasets.slice(0, -1),
-        };
-      }
-      return prevData;
-    });
+  const options = {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: {
+        title: {
+          display: true,
+          text: xAxisLabel,
+        },
+      },
+      y: {
+        title: {
+          display: true,
+          text: yAxisLabel,
+        },
+        ticks: {
+          beginAtZero: true, // Ensure Y-axis starts from 0
+        },
+      },
+    },
+    plugins: {
+      title: {
+        display: true,
+        text: title,
+      },
+      tooltip: {
+        callbacks: {
+          label: (tooltipItem) => `Value: ${tooltipItem.raw}`, // Show value on hover
+        },
+      },
+    },
   };
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      setChartData((prevData) => {
-        const now = new Date().toLocaleTimeString();
-        const updatedDatasets = prevData.datasets.map((dataset) => {
-          const newValue = Math.floor(Math.random() * 100);
-          let updatedData = [...dataset.data, newValue];
-          if (updatedData.length > 20) {
-            updatedData.shift();
-          }
-          return {
-            ...dataset,
-            data: updatedData,
-          };
-        });
-
-        let updatedLabels = [...prevData.labels, now];
-        if (updatedLabels.length > 20) {
-          updatedLabels.shift();
-        }
-
-        return {
-          labels: updatedLabels,
-          datasets: updatedDatasets,
-        };
-      });
-    }, 1000);
-
-    return () => clearInterval(interval);
-  }, []);
-
-  return (
-    <div>
-      <h2>Real-Time Chart</h2>
-      <div style={{ marginBottom: '20px' }}>
-        <button onClick={addDataset} style={{ marginRight: '10px' }}>Add Dataset</button>
-        <button onClick={removeDataset}>Remove Dataset</button>
-      </div>
-      <Line
-        data={chartData}
-        options={{
-          responsive: true,
-          scales: {
-            x: {
-              title: {
-                display: true,
-                text: 'Time',
-              },
-            },
-            y: {
-              title: {
-                display: true,
-                text: 'Value',
-              },
-              beginAtZero: true,
-            },
-          },
-        }}
-      />
-    </div>
-  );
+  return <Line data={data} options={options} />;
 };
 
-export default RealTimeChart;
+export default ChartComponent;

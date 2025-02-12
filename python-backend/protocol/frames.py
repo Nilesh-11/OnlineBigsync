@@ -1,7 +1,6 @@
 from abc import ABCMeta
-from Utils.utils import *
+from protocol.Utils.utils import *
 from struct import pack, unpack
-
 class commonFrame(metaclass=ABCMeta):
     FRAME_TYPES = { "data": 0, "header": 1, "cfg1": 2, "cfg2": 3, "cfg3": 5, "cmd": 4 }
     FRAME_TYPES_WORDS = { code: word for word, code in FRAME_TYPES.items() }
@@ -127,7 +126,6 @@ class pmuCfg(object):
             "analog": [],
             "digital": []
         }
-        # print(self.phnmr, self.annmr, self.dgnmr)
         cur = 0
         for i in range(self.phnmr):
             phname = data[cur : cur + 16]
@@ -150,7 +148,7 @@ class pmuCfg(object):
         data = ''.join(bin(byte)[2:].zfill(8) for byte in data)
         self.phunit = []
         start = 0
-        for i in range(self.phnmr):
+        for _ in range(self.phnmr):
             _data = data[start: start + 32]
 
             if self.format[3] != '0':
@@ -174,7 +172,7 @@ class pmuCfg(object):
         self.anunit = []
         TYPES = { "0": "pow", "1": "rms", "2": "peak" }
         start = 0
-        for i in range(self.annmr):
+        for _ in range(self.annmr):
             _data = data[start: start + 32]
             
             analog_type = int(_data[0:8], 2)
@@ -190,7 +188,7 @@ class pmuCfg(object):
         data = ''.join(bin(byte)[2:].zfill(8) for byte in data)
         self.dgunit = []
         start = 0
-        for i in range(self.dgnmr):
+        for _ in range(self.dgnmr):
             word1 = data[start : start + 16]
             start += 16
             word2 = data[start : start + 16]
@@ -232,10 +230,10 @@ class cfg1(commonFrame):
         super().__init__(data[0:14])
         self.get_TIME_BASE(data[14:18])
         self.get_NUM_PMU(data[18:20])
-        self.time = self.soc + self.fracsec / self.time_base
+        self.time = decode_synchrophasor_time(self.soc, self.fracsec, self.time_base)
         self.pmus = []
         start = 20
-        for i in range(self.num_pmu):
+        for _ in range(self.num_pmu):
             ipmu = pmuCfg(data, start)
             start = ipmu.end
             self.pmus.append(ipmu)
@@ -419,7 +417,7 @@ class dataFrame(commonFrame):
         super().__init__(data[0:14])
         self.start = 14
         self.time_base = time_base
-        self.time = self.soc + self.fracsec / self.time_base
+        self.time = decode_synchrophasor_time(self.soc, self.fracsec, self.time_base)
         self.num_pmu = num_pmu
         self.pmu_data = []
         self.start = 14
@@ -485,17 +483,3 @@ class commandFrame(commonFrame):
     
     def get_EXTFRAME(self, data):
         self.extframe = ''.join(bin(byte)[2:].zfill(8) for byte in data)
-
-if __name__ == "__main__":
-    # data = b'\xaa\x01\x00^\x00\x01f\xd9\x97{\x07\x0b\xb2\xcb\x00\x00F\x1a\xcdQ:\x0b\xb6ZE"\xc8\x05\xbe\xc0K\x99Bp\x00\x01\x00\x00\x00\x00\x00\x00F%\xba\xf9>-\xf4eE\xa0\x14:>-\xf4ABp\x00\x01\x00\x00\x00\x00\x00\x00E\xff4\xf2=\x98-\x13EY\x08\x04=\xee\xa6=Bp\x00\x01\x00\x00\x00\x00\xc4<'
-    # data = b'\xaa\x01\x00*\x00\x01f\xf4W\x05\x08\x08\xa5\x8b\x00\x00F\x1bgz>m\xf8yE\xa1\xbe8=&\x05|Bh\x97T\x00\x00\x00\x00Ex'
-    # cfg = b'\xaa1\x00^\x00\x01f\xf1\xc0X\x00\x06\x1a\x80\x00\x0fB@\x00\x01GEN-        1- 1\x00\x01\x00\x0f\x00\x02\x00\x00\x00\x00Voltage         Current         \x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x1e\xc4\xc0'
-    cfg = b'\xaa1\x00^\x00\x01g6>.\x00\x02\x8b\x0b\x00\x0fB@\x00\x01BUS-           7\x00\x01\x00\x0f\x00\x02\x00\x00\x00\x00Voltage         Current         \x00\x00\x00\x00\x01\x00\x00\x00\x00\x00\x00\x00\x00\x1e\x0b\x0c'
-    dnt = b'\xaa\x01\x00*\x00\x01g6>0\x08\x06\x9c\xb5\x00\x00H\x04\xfcL=\x93,\xf1\x00\x00\x00\x00\x00\x00\x00\x00Bp\x00\x00\x00\x00\x00\x00\x0f\x19'
-    frame = cfg1(cfg)
-    # print(frame)
-    # print(frame)
-    frame = dataFrame(data=dnt, pmuinfo=frame.pmus, time_base=frame.time_base, num_pmu=frame.num_pmu)
-    print(frame)
-    # print(frame.start)
-# 10bits - 001000000001011010

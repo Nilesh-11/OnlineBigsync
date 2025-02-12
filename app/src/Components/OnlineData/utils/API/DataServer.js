@@ -1,22 +1,24 @@
-const DataFromServer = async(url) => {
-    console.log('serverAddress', url);
-    console.log(action_type, message)
+const DataFromServer = async([timeWindowLen], url) => {
     try {
         // Send the file to the server
         const response = await fetch(url, {
-          method: 'GET',
+          method: 'POST',
           headers: {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            action: action_type,
-            msg: message
+            time_window: timeWindowLen
           }),
         });
         if (response.ok) {
           const responseData = await response.json(); // Parse the response as JSON
-          if (responseData.status_code !== 200){
-            console.error('Error:', responseData.message)
+          if (!responseData || responseData.status_code !== 200){
+            if(!responseData) {
+              throw Error('No data fetched')
+            }
+            else{
+              console.error('Error:', responseData.message)
+            }
           }
           else{
             return responseData;

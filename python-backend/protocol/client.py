@@ -1,12 +1,15 @@
 from protocol.frames import *
-from Utils.utils import *
-from Utils.process_frames import *
-from DatabaseManager import *
+from protocol.Utils.utils import *
+from protocol.Utils.process_frames import *
+from protocol.DatabaseManager import *
+from algos.event_classification import *
 import socket
 import pandas as pd
 import os
 import threading
 from enum import Enum
+from datetime import datetime, timedelta
+from collections import defaultdict
 
 FRAME_TYPES = {
     0: dataFrame,
@@ -44,6 +47,12 @@ class client(object):
             "data":[],
             "type":[]
         }
+        self.threshold_values = {'stepChange': 0.1, 'oscillatoryEvent': 5.0, 'impulseEvent': 2.0, 'islandingEvent': 0.1}
+        self.window_lens = {'islandingEvent': 10, 'genloadLossEvent': 10, 'oscillatoryEvent':10, 'impulseEvent': 10}
+    
+    def checkDbUpdates(self):
+        time_stamp = self.dbUser.get_max_timestamp(frameIdentifier=self.cfg.identifier)
+        return bool(time_stamp is not None)
     
     def execute_interrupt(self):
         if self.interrupt_action == interruptType.SEND_DATA.value:
@@ -110,9 +119,37 @@ class client(object):
             self.datas['data'] = []
             self.datas['type'] = []
     
-    def get_dataframes(self):
-        data = self.dbUser.get_dataframes(self.cfg.identifier)
-        res = {}
-        for i in range(len(data[0])):
-            res[self.dbUser.data_column_names[i]] = [row[i] for row in data]
+    def get_frequency_time(self, time_window):
+        max_timestamp = self.dbUser.get_max_timestamp(self.cfg.identifier)
+        assert max_timestamp is not None, "data not found"
+        data = self.dbUser.get_frequency_dataframes(self.cfg.identifier, time_window, max_timestamp)
+        num_pmu = data[0][2]
+        station_names = data[0][3]
+        res = {
+            'time': [d[0] for d in data],
+            'num_pmu': num_pmu,
+            'pmus': [{'stationname': station_names[j], 'frequency': [d[1][j] for d in data]} for j in range(num_pmu)]
+        }
+        
         return res
+    
+    def detect_events(self):
+        pass
+    
+    def classify_events(self):
+        # while True:
+        data = self.get_frequency_time(max(self.window_lens.values()))
+        max_time = max(data['time'])
+        timeDelta = {key: timedelta(seconds=value) for key, value in self.window_lens.items()}
+        eventsData = defaultdict(lambda: defaultdict(lambda: {'freq': [], 'time': []}))
+        
+        for pmuData in data['pmus']:
+            for event in self.window_lens.keys():
+                for i in range(len(data['time'])):
+                    if not eventsData[event][pmuData['stationname']]['freq']:
+                        eventsData[event][pmuData['stationname']]['freq'] = []
+                    if max_time - timeDelta[event] <= data['time'][i] <= max_time:
+                        eventsData[event][pmuData['stationname']]['freq'].append(pmuData['frequency'][i])
+                        eventsData[event][pmuData['stationname']]['time'].append(data['time'][i])
+        
+        print(eventsData)
