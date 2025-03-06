@@ -76,14 +76,12 @@ const LiveDashboard = () => {
     }, [timeWindowLen]);
 
     useEffect(() => {
-        // console.log("Updated pmusData:", pmusData);
         if(currPmu){
             setFreqData(pmusData[currPmu].frequency)
         }
     }, [pmusData]);
     
     useEffect(() => {
-        // console.log("Updated pmuNames:", pmuNames);
         if(!currPmu && pmuNames){
             setCurrPmu(pmuNames[0])
         }

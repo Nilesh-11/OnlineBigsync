@@ -25,13 +25,16 @@ from dotenv import load_dotenv
 load_dotenv()
 
 user=None
-user_thread = None
+serverData_thread = None
+events_thread = None
+fetch_events = False
+
 app = FastAPI()
 
 # Allow requests from all origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*", "http://localhost:3000"],
+    allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -62,13 +65,13 @@ class OSLPSettings(BaseModel):
     time : List[float]
     data: Dict[str, Dict[str, List[float]]] = {
     "Sub1-l1": {
-        'F': [0.0] * 5000,
-        'V': [0.0] * 5000,
-        'VA': [0.0] * 5000,
-        'I': [0.0] * 5000,
-        'IA': [0.0] * 5000
+            'F': [0.0] * 5000,
+            'V': [0.0] * 5000,
+            'VA': [0.0] * 5000,
+            'I': [0.0] * 5000,
+            'IA': [0.0] * 5000
+        }
     }
-}
     points:List[float]
 
 class ServerInfoSettings(BaseModel):
@@ -88,10 +91,30 @@ class SetParameterSettings(BaseModel):
     IEThreshold: int
     IsEThreshold: int
 
+
+class TestSettings(BaseModel):
+    time: List[float]
+    num_pmu: int
+    pmus: List[dict]
+
 @app.post('/test')
-def test():
-    user.classify_events()
-    return {'status': 200}
+def test(event_settings: TestSettings):
+    if not event_settings.time or not event_settings.num_pmu or not event_settings.pmus:
+        raise HTTPException(status_code=400, detail="Bad request from the client")
+    
+    global serverData_thread
+    global user
+
+    start_time = datetime.utcnow()
+    converted_time = [start_time + timedelta(seconds=t) for t in event_settings.time]
+
+    data = {}
+    data['time'] = converted_time
+    data['num_pmu'] = event_settings.num_pmu
+    data['pmus'] = event_settings.pmus
+    res = user.classify_events(data)
+    return {'status': 200,
+            'result': res}
 
 @app.get("/")
 def index():
@@ -99,16 +122,17 @@ def index():
 
 @app.post("/connect-server")
 async def connect_to_server(event_settings: ServerInfoSettings):
-    global user_thread
+    global serverData_thread
     global user
+    
     if not event_settings.ip or not event_settings.port:
         raise HTTPException(status_code=400, detail="Bad request from the client")
 
     user = client(event_settings.ip, event_settings.port)
-    user_thread = threading.Thread(target=user.receive)
+    serverData_thread = threading.Thread(target=user.receive)
     
     try:
-        user_thread.start()
+        serverData_thread.start()
         sessionID = generate_unique_identifier(event_settings.ip, event_settings.port)
         defaultData = {
             "threshold_values": user.threshold_values,
@@ -130,6 +154,34 @@ async def connect_to_server(event_settings: ServerInfoSettings):
                 "status": "failed",
                 "status_code": 500,
                 "message": "Failed to connect"
+            }
+    except:
+        res = {
+            "status": "failed",
+            "status_code": 500,
+            "message": "An error occured"
+        }
+    return res
+
+@app.post("/classify-events")
+async def classify_events():
+    global events_thread
+    global user
+
+    events_thread = threading.Thread(target=user.classify_events)
+    
+    try:
+        events_thread.start()
+        res = {
+            "status": "success",
+            "status_code": 200
+        }
+    except Exception as e:
+        print(f"Error: failed to connect{e}")
+        res = {
+                "status": "failed",
+                "status_code": 500,
+                "message": "Failed to classify events"
             }
     except:
         res = {
@@ -166,6 +218,7 @@ async def set_parameters(event_settings: SetParameterSettings):
 async def send_data(event_settings: DataServerSettings):
     if not event_settings.time_window:
         raise HTTPException(status_code=400, detail="Bad request from the client")
+    print(event_settings)
     data = user.get_frequency_time(event_settings.time_window)
     
     res = {
@@ -176,15 +229,19 @@ async def send_data(event_settings: DataServerSettings):
     }
     return res
 
-
 @app.post("/close-conn")
 async def close_connection():
     global user
-    global user_thread
+    global serverData_thread
+    global events_thread
+    global fetch_events
+
     try:
         user.interrupt_action = interruptType.CLOSE_CONN.value
         user.interrupt_event.set()
-        user_thread.join()
+        serverData_thread.join()
+        events_thread.join()
+        fetch_events = False
         res =  {
             "status":"success",
             "status_code": 200,
@@ -204,14 +261,14 @@ async def action_to_server(event_settings: ServerInterruptSettings):
         raise HTTPException(status_code=400, detail="Bad request from the client")
     
     global user
-    global user_thread
+    global serverData_thread
     
     try:
         user.interrupt_action = event_settings.action
         user.interrupt_msg = event_settings.msg
         user.interrupt_event.set()
         if user.interrupt_action == interruptType.CLOSE_CONN.value:
-            user_thread.join()
+            serverData_thread.join()
         res =  {
             "status":"success",
             "status_code": 200,
@@ -230,9 +287,6 @@ async def action_to_server(event_settings: ServerInterruptSettings):
 async def classify_event_data(event_settings: EventClassificationSettings):
     if not event_settings.time or not event_settings.data or not event_settings.thresholdValues:
         raise HTTPException(status_code=400, detail="Bad request from the client")
-    # print("data:", event_settings.data)
-    # print("time:", event_settings.time)
-    # print("threshold_values", event_settings.thresholdValues)
     res = eventClassification(
         event_settings.data, event_settings.time,
         event_settings.thresholdValues,
@@ -243,11 +297,6 @@ async def classify_event_data(event_settings: EventClassificationSettings):
 async def detect_event(event_settings: EventDetectionSettings):
     if not event_settings.time or not event_settings.data:
         raise HTTPException(status_code=400, detail="Bad request from the client")
-    # print(event_settings)
-    # print("data", event_settings.data)
-    # print("time", event_settings.time)
-    # print("windowSize", event_settings.windowSize)
-    # print("sd_th", event_settings.sd_th)
     res = eventDetection(
         event_settings.data, event_settings.time,
         float(event_settings.windowSize),
@@ -261,10 +310,6 @@ async def detect_event(event_settings: EventDetectionSettings):
 async def detect_islanding_event(event_settings: IslandingEventClassificationSettings):
     if not event_settings.time or not event_settings.data or not event_settings.thresholdValues:
         raise HTTPException(status_code=400, detail="Bad request from the client")
-    # print(event_settings)
-    # print("data:", event_settings.data)
-    # print("time:", event_settings.time)
-    # print("threshold_values", event_settings.thresholdValues)
     res = classifyIslandingEvent(
         event_settings.data, event_settings.time,
         event_settings.thresholdValues,
@@ -275,7 +320,6 @@ async def detect_islanding_event(event_settings: IslandingEventClassificationSet
 async def detect_islanding_event(event_settings: StatisticsSettings):
     if not event_settings.data:
         raise HTTPException(status_code=400, detail="Bad request from the client")
-    # print(event_settings)
     res = findStats(
         event_settings.data
     )

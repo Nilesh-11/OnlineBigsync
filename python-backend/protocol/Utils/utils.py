@@ -115,6 +115,9 @@ def soc_to_dateTime(soc):
 
     return day, month, date, year, time
 
+def is_2d_array(arr):
+    return isinstance(arr, list) and all(isinstance(row, list) for row in arr)
+
 def removeNan(arr):
     curr = 60
     for i in range(len(arr)):

@@ -183,41 +183,43 @@ TriggerReason VARCHAR(24)
 oscillatory_events_table_name = "oscillatory_events"
 oscillatory_events_table_details = '''
 Identifier VARCHAR(128),
-StationName VARCHAR(16),
-Power INT[],
-Frequency INT[],
-Time INT[]
+StationName VARCHAR(128),
+Frequency FLOAT[],
+Power FLOAT[],
+fftFrequency FLOAT[],
+Time timestamp[]
 '''
 
 islanding_events_table_name = "islanding_events"
 islanding_events_table_details = '''
 Identifier VARCHAR(128),
 StationsCount INT,
-StationNames VARCHAR(16)[],
-Frequency INT[],
-Time INT[]
+StationNames VARCHAR(128)[],
+Frequency FLOAT[][],
+Time timestamp[]
 '''
 
 genLoss_events_table_name = "genloss_events"
 genLoss_events_table_details = '''
 Identifier VARCHAR(128),
-StationName VARCHAR(16),
-Frequency INT[],
-Time INT[]
+StationName VARCHAR(128),
+Frequency FLOAT[],
+Time timestamp[]
 '''
 
 loadLoss_events_table_name = "loadloss_events"
 loadLoss_events_table_details = '''
 Identifier VARCHAR(128),
-StationName VARCHAR(16),
-Frequency INT[],
-Time INT[]
+StationName VARCHAR(128),
+Frequency FLOAT[],
+Time timestamp[]
 '''
 
 impulse_events_table_name = "impulse_events"
 impulse_events_table_details = '''
 Identifier VARCHAR(128),
-StationName VARCHAR(16),
-Frequency INT[],
-Time INT[]
+StationName VARCHAR(128),
+Frequency FLOAT[],
+ROCOF FLOAT[],
+Time timestamp[]
 '''

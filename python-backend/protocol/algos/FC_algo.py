@@ -1,64 +1,59 @@
 
 from protocol.algos.SignalProcessing import SignalProcessing
-from protocol.Utils.utils import removeNan
+from protocol.Utils.utils import removeNan, is_2d_array
 import numpy as np
 
 def impulseEventClassification(freq_data, time_data, th_impulse):
     try:
-        duration = time_data[-1] - time_data[0]
+        duration = (time_data[-1] - time_data[0]).total_seconds()
         n_samples = len(time_data)
         time_data = np.linspace(0,duration,n_samples)    
         curr_data = freq_data
-        kalman_filter_output = SignalProcessing._KalmanFilter(SignalProcessing(),curr_data)
+        kalman_filter_output = SignalProcessing._KalmanFilter(SignalProcessing(), curr_data)
         rocof_data = kalman_filter_output[2]
         max_rocof = max(rocof_data)
         
         if((max_rocof)>th_impulse):
-            return [rocof_data.tolist(), time_data.tolist()], True
-        return None
+            return [rocof_data.tolist(), time_data], True
+        
+        return None, False
     except Exception as e:
             # Handle the exception, log it, and return a generic error response
             print(f"An error occurred in _impulseEvent: {str(e)}")
             return ({'error': 'An unexpected error occurred'}), False
-        
+
 def stepChangeEvent(freq_data, time_data, th_step):
     try:
-        win_size = int(len(time_data)/((time_data[-1]-time_data[0])/win_size))
-        duration = time_data[-1] - time_data[0]
-        n_samples = len(time_data)
-        time_data = np.linspace(0,duration,n_samples)   
-        curr_data = np.array(freq_data)
-        curr_time_data = np.array(time_data)
-        f_max_index = np.argmax(curr_data)
-        f_max = curr_data[f_max_index]
-        t_max = curr_time_data[f_max_index]
-        f_min_index = np.argmin(curr_data)
-        f_min = curr_data[f_min_index]
-        t_min = curr_time_data[f_min_index]
+        f_max_index = np.argmax(freq_data)
+        f_max = freq_data[f_max_index]
+        t_max = time_data[f_max_index]
         
-        if(abs(t_max - t_min) > 10 and abs(f_max - f_min) > th_step):
-            slope_avg = (f_min-f_max)/(t_min-t_max)
+        f_min_index = np.argmin(freq_data)
+        f_min = freq_data[f_min_index]
+        t_min = time_data[f_min_index]
+
+        if abs((t_max - t_min).total_seconds()) > 10 and abs(f_max - f_min) > th_step:
+            slope_avg = (f_min - f_max) / (t_min - t_max).total_seconds()
             if slope_avg < 0:
-                return [curr_data.tolist(),curr_time_data.tolist(),'gen']
+                return ['gen']
             else:
-                return [curr_data.tolist(),curr_time_data.tolist(),'load']
-        else:
-            return None
+                return ['load']
     except Exception as e:
-        # Handle the exception, log it, and return a generic error response
         print(f"An error occurred in _stepChangeEvent: {str(e)}")
-        return ({'error': 'An unexpected error occurred'})
-    
+        return {'error': 'An unexpected error occurred'}
+
 def gen_load_LossClassification(data, time, threshold):
     stepChangeData = stepChangeEvent(data, time, threshold)
     if stepChangeData is not None:
         loadLossData = None
         genLossData = None
         if stepChangeData[-1] == 'gen':
-            genLossData = stepChangeData[:len(stepChangeData)-1]
+            genLossData = data
+            lossType = 'gen'
         else:
-            loadLossData = stepChangeData[:len(stepChangeData)-1]
-        return [genLossData, loadLossData], True
+            loadLossData = data
+            lossType = 'load'
+        return [genLossData, loadLossData, lossType], True
     else:
         return None, False
 
@@ -77,7 +72,7 @@ def islandingEventClassification(freqs_data, time_data, f_th):
         del_fe = f_max_e - f_min_e
 
         if del_fs < f_th and del_fe > f_th:
-            return [freqs_data, time_data.tolist()], True
+            return [freqs_data, time_data], True
         
         return None, False
 
@@ -85,10 +80,9 @@ def islandingEventClassification(freqs_data, time_data, f_th):
         print(f"An error occurred in islandingEvent: {str(e)}")
         return {'error': 'An unexpected error occurred'}, False
 
-def oscillatoryEvent(freq_data, time_data, P_th):
+def oscillatoryEventClassification(freq_data, time_data, P_th):
     try:
-        fs = 1 / (time_data[1] - time_data[0])
-
+        fs = 1 / (time_data[1] - time_data[0]).total_seconds()
         kalman_filter_output = SignalProcessing._KalmanFilter(SignalProcessing(), freq_data)
         rocof_data = kalman_filter_output[2]
 

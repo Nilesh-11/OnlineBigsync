@@ -75,6 +75,7 @@ class EventClassification(FaultDetection):
                 f_min_index = np.argmin(curr_data)
                 f_min = curr_data[f_min_index]
                 t_min = curr_time_data[f_min_index]
+                
                 if(abs(t_max - t_min) > 10 and abs(f_max - f_min) > th_step):
                     slope_avg = (f_min-f_max)/(t_min-t_max)
                     if slope_avg < 0:
@@ -191,5 +192,3 @@ class EventClassification(FaultDetection):
             # Handle the exception, log it, and return a generic error response
             print(f"An error occurred in _impulseEvent: {str(e)}")
             return ({'error': 'An unexpected error occurred'})
-        
-

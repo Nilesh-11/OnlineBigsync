@@ -178,8 +178,6 @@ class DatabaseManager:
                     res = format_analog_unit_type_array(data[j])
                 elif columnNames[j] == 'digitalunit':
                     res = format_digital_unit_type_array(data[j])
-                # elif columnNames[j] == 'time':
-                #     res = format_timestamp_type(data[j])
                 else:
                     res = "\'" + convert_to_postgres_datatype(data[j]) + "\'"
                 values.append(res)
