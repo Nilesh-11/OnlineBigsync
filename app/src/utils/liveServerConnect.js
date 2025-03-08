@@ -1,4 +1,4 @@
-const connectToServer = async ([serverIp, serverPort], url, navigate) => {
+const connectToServer = async ([serverIp, serverPort], url) => {
   console.log('serverAddress', url);
   console.log(serverIp, serverPort);
   try {

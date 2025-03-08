@@ -143,7 +143,7 @@ class DatabaseManager:
             print(f"Table '{table_name}' created successfully.")
         except Exception as e:
             print(f"Error creating table '{table_name}': {e}")
-
+    
     def store_frame(self, datas, frame_type):
         """Stores the stack of frames in database
 
@@ -228,6 +228,83 @@ class DatabaseManager:
         WHERE identifier = \'\"{frameIdentifier}\"\'
         AND time BETWEEN \'{timestamp}\'::timestamp - INTERVAL '{time_window_len} seconds' AND \'{timestamp}\'::timestamp
         ORDER BY time ASC
+        '''
+        data = self.fetch_all(query)
+        return data
+    
+    def get_all_events(self, tableNames, stationName, frameIdentifier, time_window_len, timestamp, lim=100):
+        res = []
+        for tableName in tableNames:
+            query = f'''
+            SELECT time[1], time[array_length(Time, 1)]
+            FROM {tableName}
+            WHERE identifier = \'\"{frameIdentifier}\"\' 
+            AND stationname = \'\"{stationName}\"\' 
+            AND time[array_length(time, 1)] BETWEEN \'{timestamp}\'::timestamp - INTERVAL '{time_window_len} seconds' 
+                AND \'{timestamp}\'::timestamp
+            LIMIT {lim}
+            '''
+            data = self.fetch_all(query)
+            res.append(data)
+
+        query = f'''
+        SELECT time[1], time[array_length(Time, 1)]
+        from {islanding_events_table_name}
+        WHERE identifier = \'\"{frameIdentifier}\"\'
+        AND time[array_length(time, 1)] BETWEEN \'{timestamp}\'::timestamp - INTERVAL '{time_window_len} seconds' 
+                AND \'{timestamp}\'::timestamp
+        LIMIT {lim}
+        '''
+        data = self.fetch_all(query)
+        res.append(data)
+        return res
+    
+    def get_oscillatory_data(self, mintime, maxtime):
+        query = f'''
+        SELECT stationname, frequency, power, fftfrequency, time, threshold
+        FROM {oscillatory_events_table_name}
+        WHERE time[1] = \'\"{mintime}\"\'
+        AND time[array_length(time, 1)] = \'\"{maxtime}\"\'
+        '''
+        data = self.fetch_all(query)
+        return data
+    
+    def get_impulse_data(self, mintime, maxtime):
+        query = f'''
+        SELECT stationname, frequency, rocof, time, threshold
+        FROM {impulse_events_table_name}
+        WHERE time[1] = \'\"{mintime}\"\'
+        AND time[array_length(time, 1)] = \'\"{maxtime}\"\'
+        '''
+        data = self.fetch_all(query)
+        return data
+    
+    def get_genloss_data(self, mintime, maxtime):
+        query = f'''
+        SELECT stationname, frequency, time, threshold
+        FROM {genLoss_events_table_name}
+        WHERE time[1] = \'\"{mintime}\"\'
+        AND time[array_length(time, 1)] = \'\"{maxtime}\"\'
+        '''
+        data = self.fetch_all(query)
+        return data
+    
+    def get_loadloss_data(self, mintime, maxtime):
+        query = f'''
+        SELECT stationname, frequency, time, threshold
+        FROM {loadLoss_events_table_name}
+        WHERE time[1] = \'\"{mintime}\"\'
+        AND time[array_length(time, 1)] = \'\"{maxtime}\"\'
+        '''
+        data = self.fetch_all(query)
+        return data
+    
+    def get_islanding_data(self, mintime, maxtime):
+        query = f'''
+        SELECT stationnames, frequency, time, threshold
+        FROM {islanding_events_table_name}
+        WHERE time[1] = \'\"{mintime}\"\'
+        AND time[array_length(time, 1)] = \'\"{maxtime}\"\'
         '''
         data = self.fetch_all(query)
         return data

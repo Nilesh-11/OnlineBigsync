@@ -147,7 +147,7 @@ const Navabar = (props) => {
           <Typography variant="h6" component="div" sx={{ flexGrow: 1 }}>
             BigSync
           </Typography>
-          <input type="file" style={styles.fileInputStyle} id="fileInputNav" accept=".csv" onChange={handleImportFile}/>
+          {/* <input type="file" style={styles.fileInputStyle} id="fileInputNav" accept=".csv" onChange={handleImportFile}/> */}
           {/* <label htmlFor="fileInputNav">
             <Button
               color="inherit"

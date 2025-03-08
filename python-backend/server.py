@@ -5,7 +5,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel
 from fastapi import HTTPException
 import numpy as np 
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 import json
 from algos.event_detection import eventDetection
@@ -77,44 +77,52 @@ class OSLPSettings(BaseModel):
 class ServerInfoSettings(BaseModel):
     ip: str
     port: int
-    
+
 class ServerInterruptSettings(BaseModel):
     action: int
     msg: str
     
 class DataServerSettings(BaseModel):
-    time_window: int
-    
-class SetParameterSettings(BaseModel):
-    SCThreshold: int
-    OCThreshold: int
-    IEThreshold: int
-    IsEThreshold: int
+    stationName: Optional[str]
+    data_time_len: int
+    events_time_len: int
 
+class parameterWindowLensSettings(BaseModel):
+    events: int
+    data: int
+
+class parameterEventLenSettings(BaseModel):
+    islandingEvent: int
+    genloadLossEvent: int
+    oscillatoryEvent: int
+    impulseEvent: int
+
+class parameterThresholdSettings(BaseModel):
+    stepChange: float
+    islandingEvent: float
+    oscillatoryEvent: float
+    impulseEvent: float
 
 class TestSettings(BaseModel):
-    time: List[float]
-    num_pmu: int
-    pmus: List[dict]
+    stationName: str
+    time_len: int
+
+class EventAnalyticsSettings(BaseModel):
+    mintime: str
+    maxtime: str
+    eventtype: str
 
 @app.post('/test')
 def test(event_settings: TestSettings):
-    if not event_settings.time or not event_settings.num_pmu or not event_settings.pmus:
+    if not event_settings.stationName or not event_settings.time_len:
         raise HTTPException(status_code=400, detail="Bad request from the client")
     
-    global serverData_thread
     global user
 
-    start_time = datetime.utcnow()
-    converted_time = [start_time + timedelta(seconds=t) for t in event_settings.time]
+    res = user.get_data(event_settings.stationName, event_settings.time_len)
 
-    data = {}
-    data['time'] = converted_time
-    data['num_pmu'] = event_settings.num_pmu
-    data['pmus'] = event_settings.pmus
-    res = user.classify_events(data)
     return {'status': 200,
-            'result': res}
+            'data': res}
 
 @app.get("/")
 def index():
@@ -122,25 +130,29 @@ def index():
 
 @app.post("/connect-server")
 async def connect_to_server(event_settings: ServerInfoSettings):
-    global serverData_thread
     global user
+    global serverData_thread
+    global events_thread
     
     if not event_settings.ip or not event_settings.port:
         raise HTTPException(status_code=400, detail="Bad request from the client")
 
     user = client(event_settings.ip, event_settings.port)
     serverData_thread = threading.Thread(target=user.receive)
+    events_thread = threading.Thread(target=user.classify_events)
     
     try:
         serverData_thread.start()
         sessionID = generate_unique_identifier(event_settings.ip, event_settings.port)
         defaultData = {
             "threshold_values": user.threshold_values,
-            "window_lens": user.window_lens
+            "event_WindowLens": user.eventWindowLens,
+            "window_lens": user.windowLens
         }
         await asyncio.sleep(2)
         while not user.checkDbUpdates():
             await asyncio.sleep(1)
+        events_thread.start()
         res = {
             "status": "success",
             "status_code": 200,
@@ -163,18 +175,20 @@ async def connect_to_server(event_settings: ServerInfoSettings):
         }
     return res
 
-@app.post("/classify-events")
-async def classify_events():
-    global events_thread
+@app.post("/live-events-analytics")
+async def event_analytics(event_settings: EventAnalyticsSettings):
+    if not event_settings.mintime or not event_settings.maxtime or not event_settings.eventtype:
+        raise HTTPException(status_code=400, detail="Bad request from the client")
+    
     global user
 
-    events_thread = threading.Thread(target=user.classify_events)
+    data = user.get_event_analytics(event_settings.eventtype, event_settings.mintime, event_settings.maxtime)
     
     try:
-        events_thread.start()
         res = {
             "status": "success",
-            "status_code": 200
+            "status_code": 200,
+            "data": data
         }
     except Exception as e:
         print(f"Error: failed to connect{e}")
@@ -193,13 +207,19 @@ async def classify_events():
 
 @app.get("/conn-details")
 async def connection_details():
-    time_stamp = user.dbUser.get_max_timestamp(frameIdentifier=user.cfg.identifier)
+    global serverData_thread
+    global events_thread
 
-    if time_stamp is not None:
+    time_stamp = user.dbUser.get_max_timestamp(frameIdentifier=user.cfg.identifier)
+    dbok = time_stamp is not None
+    socketok = serverData_thread.is_alive()
+    eventsok = events_thread.is_alive()
+    
+    if socketok and dbok:
         res = {
             "status": "success",
             "status_code": 200,
-            "message": "connection is successfully established",
+            "message": "connection is successfully established " + "and classifying events" if eventsok else "",
         }
     else:
         res = {
@@ -209,18 +229,64 @@ async def connection_details():
         }
     return res
 
-@app.post('/set-parameters')
-async def set_parameters(event_settings: SetParameterSettings):
-    if not event_settings.IEThreshold or not event_settings.IsEThreshold or not event_settings.SCThreshold or not event_settings.OCThreshold:
+@app.post('/set-parameters-threshold')
+async def set_threshold_parameters(event_settings: parameterThresholdSettings):
+    if not event_settings.stepChange or not event_settings.oscillatoryEvent or not event_settings.islandingEvent or not event_settings.islandingEvent:
         raise HTTPException(status_code=400, detail="Bad request from the client")
+    global user
+    
+    user.threshold_values['stepChange'] = event_settings.stepChange
+    user.threshold_values['islandingEvent'] = event_settings.islandingEvent
+    user.threshold_values['oscillatoryEvent'] = event_settings.oscillatoryEvent
+    user.threshold_values['impulseEvent'] = event_settings.impulseEvent
+    
+    return {
+        "status": "success",
+        "status_code": 200,
+        "message": "Threshold values updated",
+        "data": user.threshold_values
+    }
+
+@app.post('/set-parameters-windowLens')
+async def set_windowLens_parameters(event_settings: parameterWindowLensSettings):
+    if not event_settings.events or not event_settings.data:
+        raise HTTPException(status_code=400, detail="Bad request from the client")
+    global user
+    
+    user.windowLens['events'] = event_settings.events
+    user.windowLens['data'] = event_settings.data
+    
+    return {
+        "status": "success",
+        "status_code": 200,
+        "message": "Threshold values updated",
+        "data": user.windowLens
+    }
+
+@app.post('/set-parameters-eventLens')
+async def set_eventLens_parameters(event_settings: parameterEventLenSettings):
+    if not event_settings.islandingEvent or not event_settings.genloadLossEvent or not event_settings.impulseEvent or not event_settings.oscillatoryEvent:
+        raise HTTPException(status_code=400, detail="Bad request from the client")
+    
+    global user
+    
+    user.eventWindowLens['islandingEvent'] = event_settings.islandingEvent
+    user.eventWindowLens['genloadLossEvent'] = event_settings.genloadLossEvent
+    user.eventWindowLens['impulseEvent'] = event_settings.impulseEvent
+    user.eventWindowLens['oscillatoryEvent'] = event_settings.oscillatoryEvent
+    
+    return {
+        "status": "success",
+        "status_code": 200,
+        "message": "Threshold values updated",
+        "data": user.eventWindowLens
+    }
 
 @app.post('/data-server')
 async def send_data(event_settings: DataServerSettings):
-    if not event_settings.time_window:
+    if not event_settings.data_time_len or not event_settings.events_time_len:
         raise HTTPException(status_code=400, detail="Bad request from the client")
-    print(event_settings)
-    data = user.get_frequency_time(event_settings.time_window)
-    
+    data = user.get_data(event_settings.stationName, event_settings.data_time_len, event_settings.events_time_len)
     res = {
         "status": "success",
         "status_code": 200,
@@ -234,25 +300,31 @@ async def close_connection():
     global user
     global serverData_thread
     global events_thread
-    global fetch_events
 
+    res = {
+        "status": "failed",
+        "status_code": 500,
+        "message": "Close connection request failed"
+    }
+    
     try:
         user.interrupt_action = interruptType.CLOSE_CONN.value
         user.interrupt_event.set()
-        serverData_thread.join()
-        events_thread.join()
-        fetch_events = False
+        if serverData_thread.is_alive():
+            serverData_thread.join()
+            print("Stopped receiving data")
+        if events_thread.is_alive():
+            events_thread.join()
+            print("Stopped classifying events")
         res =  {
             "status":"success",
             "status_code": 200,
             "message": "Connection is closed successfully"
         }
+    except Exception as e:
+        print("Error occurred: ", e)
     except:
-        res = {
-            "status": "failed",
-            "status_code": 500,
-            "message": "Close connection request failed"
-        }
+        print("An error occurred.")
     return res
     
 @app.post("/action-server")
@@ -280,7 +352,7 @@ async def action_to_server(event_settings: ServerInterruptSettings):
             "status_code": 500,
             "message": "Failed to execute."
         }
-        
+    
     return res
 
 @app.post("/v2/classify-event")

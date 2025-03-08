@@ -10,7 +10,6 @@ const closeConnection = async(url) => {
         });
         if (response.ok) {
             const responseData = await response.json(); // Parse the response as JSON
-            console.log(responseData);
             if (responseData.status_code !== 200){
                 console.error('Error:', responseData.message)
             }

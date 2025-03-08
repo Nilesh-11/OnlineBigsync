@@ -187,7 +187,8 @@ StationName VARCHAR(128),
 Frequency FLOAT[],
 Power FLOAT[],
 fftFrequency FLOAT[],
-Time timestamp[]
+Time timestamp[],
+Threshold FLOAT
 '''
 
 islanding_events_table_name = "islanding_events"
@@ -196,7 +197,8 @@ Identifier VARCHAR(128),
 StationsCount INT,
 StationNames VARCHAR(128)[],
 Frequency FLOAT[][],
-Time timestamp[]
+Time timestamp[],
+Threshold FLOAT
 '''
 
 genLoss_events_table_name = "genloss_events"
@@ -204,7 +206,8 @@ genLoss_events_table_details = '''
 Identifier VARCHAR(128),
 StationName VARCHAR(128),
 Frequency FLOAT[],
-Time timestamp[]
+Time timestamp[],
+Threshold FLOAT
 '''
 
 loadLoss_events_table_name = "loadloss_events"
@@ -212,7 +215,8 @@ loadLoss_events_table_details = '''
 Identifier VARCHAR(128),
 StationName VARCHAR(128),
 Frequency FLOAT[],
-Time timestamp[]
+Time timestamp[],
+Threshold FLOAT
 '''
 
 impulse_events_table_name = "impulse_events"
@@ -221,5 +225,6 @@ Identifier VARCHAR(128),
 StationName VARCHAR(128),
 Frequency FLOAT[],
 ROCOF FLOAT[],
-Time timestamp[]
+Time timestamp[],
+Threshold FLOAT
 '''

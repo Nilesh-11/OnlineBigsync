@@ -1,4 +1,4 @@
-const DataFromServer = async([timeWindowLen], url) => {
+const DataFromServer = async([dataTimeLen, eventsTimeLen, currPmu], url) => {
     try {
         // Send the file to the server
         const response = await fetch(url, {
@@ -7,7 +7,9 @@ const DataFromServer = async([timeWindowLen], url) => {
             'Content-Type': 'application/json',
           },
           body: JSON.stringify({
-            time_window: timeWindowLen
+            data_time_len: dataTimeLen,
+            events_time_len: eventsTimeLen,
+            stationName: currPmu
           }),
         });
         if (response.ok) {

@@ -9,7 +9,7 @@ import pandas as pd
 import os
 import threading
 from enum import Enum
-from datetime import datetime, timedelta
+from datetime import timedelta
 from collections import defaultdict
 
 FRAME_TYPES = {
@@ -49,7 +49,8 @@ class client(object):
             "type":[]
         }
         self.threshold_values = {'stepChange': 0.1, 'oscillatoryEvent': 5.0, 'impulseEvent': 2.0, 'islandingEvent': 0.1}
-        self.window_lens = {'islandingEvent': 20, 'genloadLossEvent': 20, 'oscillatoryEvent':20, 'impulseEvent': 20}
+        self.eventWindowLens = {'islandingEvent': 20, 'genloadLossEvent': 20, 'oscillatoryEvent':20, 'impulseEvent': 20}
+        self.windowLens = {'data': 30, 'events': 3600}
     
     def checkDbUpdates(self):
         time_stamp = self.dbUser.get_max_timestamp(frameIdentifier=self.cfg.identifier)
@@ -89,7 +90,7 @@ class client(object):
                 raise ConnectionError(f"Socket errror : {e}")
             except:
                 raise RuntimeError("Error in receiving data.")
-        print("Stopped receiving data.")
+        
     
     def update_data(self, data):
         frame_type = get_frame_type(data[0:2])
@@ -121,9 +122,30 @@ class client(object):
             self.datas['data'] = []
             self.datas['type'] = []
     
-    def fetch_data(self):
-        
-        pass
+    def get_events(self, stationName, time_len):
+        events = ['loadloss', 'genloss', 'impulse', 'oscillatory', 'islanding']
+        tableNames = [loadLoss_events_table_name,
+                      genLoss_events_table_name,
+                      impulse_events_table_name,
+                      oscillatory_events_table_name]
+        max_time = self.dbUser.get_max_timestamp(self.cfg.identifier)
+        data = self.dbUser.get_all_events(tableNames, stationName, self.cfg.identifier, time_len, max_time, 20)
+        res = {}
+        for j in range(len(events)):
+            event = events[j]
+            res[event] = None
+            if data[j]:
+                res[event] = {
+                    'mintime': [data[j][i][0] for i in range(len(data[j]))],
+                    'maxtime': [data[j][i][1] for i in range(len(data[j]))]
+                }
+        return res
+    
+    def get_data(self, stationName, data_time_len, events_time_len):
+        res = self.get_frequency_time(data_time_len)
+        data = self.get_events(stationName, events_time_len)
+        res['events'] = data
+        return res
     
     def get_frequency_time(self, time_window):
         max_timestamp = self.dbUser.get_max_timestamp(self.cfg.identifier)
@@ -141,9 +163,6 @@ class client(object):
         
         return res
     
-    def detect_events(self):
-        pass
-    
     def classify_events(self):
         print("Started classifying events...")
         prev_max_time = None
@@ -154,7 +173,7 @@ class client(object):
                         break
                     else:
                         pass
-                data = self.get_frequency_time(max(self.window_lens.values()))
+                data = self.get_frequency_time(max(self.eventWindowLens.values()))
                 if data is None:
                     continue
                 max_time = max(data['time'])
@@ -162,13 +181,13 @@ class client(object):
                     prev_max_time = max_time
                     continue
                 prev_max_time = max_time
-                timeDelta = {key: timedelta(seconds=value) for key, value in self.window_lens.items()}
+                timeDelta = {key: timedelta(seconds=value) for key, value in self.eventWindowLens.items()}
                 eventsData = defaultdict(lambda: defaultdict(lambda: {'freq': [], 'time': []}))
 
                 faults = {}
                 
                 for pmuData in data['pmus']:
-                    for event in self.window_lens.keys():
+                    for event in self.eventWindowLens.keys():
                         for i in range(len(data['time'])):
                             if not eventsData[event][pmuData['stationname']]['freq']:
                                 eventsData[event][pmuData['stationname']]['freq'] = []
@@ -191,6 +210,7 @@ class client(object):
                         res.append([pmu for pmu in eventsData['islandingEvent'].keys()])
                         res.append(freq_data)
                         res.append(time_data)
+                        res.append(self.threshold_values['islandingEvent'])
                         self.dbUser.store_events(res, 'islanding')
                     faults['islanding'] = isFault
                 
@@ -207,6 +227,7 @@ class client(object):
                         res.append(classifiedData[0]) # power
                         res.append(classifiedData[1]) # fft frequency
                         res.append(time_data)
+                        res.append(self.threshold_values['oscillatoryEvent'])
                         self.dbUser.store_events(res, 'oscillatory')
                     faults['oscillatory'].append(isFault)
                 
@@ -222,6 +243,7 @@ class client(object):
                         res.append(freq_data)
                         res.append(classifiedData[0]) # rocof
                         res.append(time_data)
+                        res.append(self.threshold_values['impulseEvent'])
                         self.dbUser.store_events(res, 'impulse')
                     faults['impulse'].append(isFault)
                 
@@ -236,10 +258,60 @@ class client(object):
                         res.append(pmu)
                         res.append(freq_data)
                         res.append(time_data)
+                        res.append(self.threshold_values['stepChange'])
                         self.dbUser.store_events(res, 'genLoss' if classifiedData[-1] == 'gen' else 'loadLoss')
                     faults['genloadLoss'].append(isFault)
                 print(faults)
             except Exception as e:
                 print(f"An error occurred in fault classification: {str(e)}")
                 return {'error': 'An unexpected error occurred'}, False
-        print("Stopped classifying events.")
+
+    def get_event_analytics(self, eventtype, mintime, maxtime):
+        data = None
+        res = None
+        if eventtype == 'oscillatory':
+            data = self.dbUser.get_oscillatory_data(mintime, maxtime)
+            res = {
+                'stationname': data[0],
+                'freq': data[1],
+                'power': data[2],
+                'fft': data[3],
+                'time': data[4],
+                'threshold': data[5]
+            }
+        elif eventtype == 'impulse':
+            data = self.dbUser.get_impulse_data(mintime, maxtime)
+            res = {
+                'stationname': data[0],
+                'freq': data[1],
+                'rocof': data[2],
+                'time': data[3],
+                'threshold': data[4]
+            }
+        elif eventtype == 'genloss':
+            data = self.dbUser.get_genloss_data(mintime, maxtime)
+            res = {
+                'stationname': data[0],
+                'freq': data[1],
+                'time': data[2],
+                'threshold': data[3]
+            }
+        elif eventtype == 'loadloss':
+            data = self.dbUser.get_loadloss_data(mintime, maxtime)
+            res = {
+                'stationname': data[0],
+                'freq': data[1],
+                'time': data[2],
+                'threshold': data[3]
+            }
+        elif eventtype == 'islanding':
+            data = self.dbUser.get_islanding_data(mintime, maxtime)
+            res = {
+                'stationnames': data[0],
+                'freq': data[1],
+                'time': data[2],
+                'threshold': data[3]
+            }
+        else:
+            raise NotImplementedError
+        return res
