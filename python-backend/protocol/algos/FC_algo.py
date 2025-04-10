@@ -19,7 +19,7 @@ def impulseEventClassification(freq_data, time_data, th_impulse):
         return None, False
     except Exception as e:
             # Handle the exception, log it, and return a generic error response
-            print(f"An error occurred in _impulseEvent: {str(e)}")
+            print(f"An error occurred in impulseEvent: {str(e)}")
             return ({'error': 'An unexpected error occurred'}), False
 
 def stepChangeEvent(freq_data, time_data, th_step):
@@ -31,7 +31,7 @@ def stepChangeEvent(freq_data, time_data, th_step):
         f_min_index = np.argmin(freq_data)
         f_min = freq_data[f_min_index]
         t_min = time_data[f_min_index]
-
+        
         if abs((t_max - t_min).total_seconds()) > 10 and abs(f_max - f_min) > th_step:
             slope_avg = (f_min - f_max) / (t_min - t_max).total_seconds()
             if slope_avg < 0:

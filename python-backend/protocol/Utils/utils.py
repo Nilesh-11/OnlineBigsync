@@ -1,4 +1,4 @@
-import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 import matplotlib.pyplot as plt
 import uuid
@@ -94,15 +94,18 @@ def generate_unique_identifier(client_address=None, client_port=None):
     
     return identifier
 
-def decode_synchrophasor_time(SOC, FRACSEC, TIME_BASE=2**24):
-    utc_time = datetime.datetime.utcfromtimestamp(SOC)
-    
-    frac_seconds = FRACSEC / TIME_BASE
-    microseconds = int(frac_seconds * 1_000_000)
-    
-    final_time = utc_time + datetime.timedelta(microseconds=microseconds)
+def decode_synchrophasor_time(SOC, FRACSEC, TIME_BASE):
+    # Extract time quality flag (upper 8 bits)
+    # time_quality = (FRACSEC >> 24) & 0xFF
 
-    return final_time
+    # Extract 24-bit fractional seconds (lower 24 bits)
+    fracsec_raw = FRACSEC
+    fractional_seconds = fracsec_raw / TIME_BASE
+
+    # Final UTC timestamp
+    timestamp = datetime.utcfromtimestamp(SOC) + timedelta(seconds=fractional_seconds)
+
+    return timestamp
 
 def soc_to_dateTime(soc):
     timestamp = datetime.datetime.utcfromtimestamp(soc)

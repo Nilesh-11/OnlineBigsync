@@ -12,6 +12,12 @@ const EventsList = React.memo(({ eventsData, eventStyles }) => {
         );
     };
 
+    const handleEventClick = (event) => {
+        const { type, minTime, maxTime } = event;
+        const url = `/live-event-analytics?eventType=${type}&minTime=${minTime}&maxTime=${maxTime}`;
+        window.open(url, '_blank');
+    };
+
     // Efficiently filter and sort events
     const sortedEvents = useMemo(() => {
         return eventTypes
@@ -71,9 +77,11 @@ const EventsList = React.memo(({ eventsData, eventStyles }) => {
                             return (
                                 <Grid item xs={12} sm={6} md={4} key={index}>
                                     <Card
+                                        onClick={() => handleEventClick(event)}
                                         sx={{
                                             borderLeft: `6px solid ${color}`,
                                             transition: 'transform 0.2s',
+                                            cursor: 'pointer',
                                             '&:hover': { transform: 'scale(1.05)' },
                                         }}
                                     >

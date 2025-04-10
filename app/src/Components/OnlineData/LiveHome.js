@@ -5,6 +5,9 @@ import GLOBAL from "../../GLOBAL";
 import connectToServer from "../../utils/liveServerConnect";
 import { useTheme } from "@mui/material/styles";
 import CloudSyncIcon from "@mui/icons-material/CloudSync";
+import Snackbar from "@mui/material/Snackbar";
+import Alert from "@mui/material/Alert";
+
 
 const serverAddress = GLOBAL.serverAddress;
 
@@ -14,23 +17,32 @@ const LandingPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const theme = useTheme();
+  const [alert, setAlert] = useState({ open: false, message: "", severity: "error" });
 
   const handleSubmit = async () => {
     if (!ip || !port) {
-      alert("IP and Port are required.");
+      setAlert({ open: true, message: "IP and Port are required.", severity: "warning" });
       return;
     }
-
+  
     setIsSubmitting(true);
     const responseData = await connectToServer([ip, port], serverAddress + "connect-server", navigate);
     setIsSubmitting(false);
-
+  
     if (responseData.status === "success") {
-      navigate("/live-dashboard", { state: { threshold_values: responseData.data.threshold_values, event_WindowLens: responseData.data.event_WindowLens, window_lens: responseData.data.window_lens} });
+      navigate("/live-dashboard", {
+        state: {
+          threshold_values: responseData.data.threshold_values,
+          event_WindowLens: responseData.data.event_WindowLens,
+          window_lens: responseData.data.window_lens
+        }
+      });
     } else {
-      navigate("/error-page");
+      setAlert({ open: true, message: "Connection failed. Please check IP and Port.", severity: "error" });
     }
   };
+  
+  
 
   return (
     <Box
@@ -108,6 +120,22 @@ const LandingPage = () => {
           </Button>
         </Paper>
       </Container>
+      <Snackbar
+  open={alert.open}
+  autoHideDuration={4000}
+  onClose={() => setAlert({ ...alert, open: false })}
+  anchorOrigin={{ vertical: "top", horizontal: "center" }}
+>
+  <Alert
+    onClose={() => setAlert({ ...alert, open: false })}
+    severity={alert.severity}
+    variant="filled"
+    sx={{ width: "100%" }}
+  >
+    {alert.message}
+  </Alert>
+</Snackbar>
+
     </Box>
   );
 };

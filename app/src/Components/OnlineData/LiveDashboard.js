@@ -33,7 +33,7 @@ const LiveDashboard = () => {
 
     const isDarkMode = theme.palette.mode === 'dark';
     const [isClosingConn, setIsClosingConn] = useState(false);
-    const [settingsOpen, setSettingsOpen] = useState(false); // Sidebar state
+    const [settingsOpen, setSettingsOpen] = useState(false);
     const [windowLens, setWindowLens] = useState(window_lens);
     const [eventWindowLens, setEventWindowLens] = useState(event_WindowLens);
     const [thresholdValues, setThresholdValues] = useState(threshold_values);
@@ -211,7 +211,7 @@ const LiveDashboard = () => {
                 />
             </Drawer>
                 </Container>
-            </Box>
+        </Box>
 
     );
 };

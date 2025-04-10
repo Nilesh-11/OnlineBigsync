@@ -6,7 +6,7 @@ const sendData = async ([data], url) => {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(data),  // <-- Send the data directly
+        body: JSON.stringify(data),
       });
   
       if (response.ok) {

@@ -1,10 +1,10 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel
 from fastapi import HTTPException
-import numpy as np 
+import numpy as np
 from typing import List, Dict, Optional
 
 import json
@@ -18,15 +18,24 @@ from algos.Algorithms.window_selection import windowSelection
 from algos.Algorithms.Prony.prony3 import pronyAnalysis
 from algos.Algorithms.OSLP.main import oslp_main
 from protocol.client import *
+from protocol.algos.FD_algo import * # temporary
 import asyncio
 import threading
 import random
+from sqlalchemy.orm import Session
 from dotenv import load_dotenv
+from protocol.Utils.dbconnection import Base, engine
+from protocol.Utils.model import InertiaDistribution
 load_dotenv()
+
+InertiaDistribution.__table__.create(bind=engine, checkfirst=True)
+# Base.metadata.create_all(bind=engine)
 
 user=None
 serverData_thread = None
-events_thread = None
+classify_events_thread = None
+IDI_thread = None
+detect_events_thread = None
 fetch_events = False
 
 app = FastAPI()
@@ -81,7 +90,7 @@ class ServerInfoSettings(BaseModel):
 class ServerInterruptSettings(BaseModel):
     action: int
     msg: str
-    
+
 class DataServerSettings(BaseModel):
     stationName: Optional[str]
     data_time_len: int
@@ -103,43 +112,69 @@ class parameterThresholdSettings(BaseModel):
     oscillatoryEvent: float
     impulseEvent: float
 
-class TestSettings(BaseModel):
-    stationName: str
-    time_len: int
-
 class EventAnalyticsSettings(BaseModel):
     mintime: str
     maxtime: str
     eventtype: str
 
+class TestSettings(BaseModel):
+    data_freq: List[float]
+    data_time: List[float]
+    threshold: float
+
 @app.post('/test')
 def test(event_settings: TestSettings):
-    if not event_settings.stationName or not event_settings.time_len:
+    if not event_settings.data_freq or not event_settings.data_time or not event_settings.threshold:
         raise HTTPException(status_code=400, detail="Bad request from the client")
     
     global user
-
-    res = user.get_data(event_settings.stationName, event_settings.time_len)
-
+    
+    res, isDetected = getFault(event_settings.data_freq, event_settings.data_time, event_settings.threshold)
+    if isDetected == False:
+        return {
+            "status": 200,
+            'data': res
+        }
     return {'status': 200,
-            'data': res}
+            'data1': res[0],
+            'data2': res[1],
+            'data3': res[2],
+            'fault': isDetected}
 
 @app.get("/")
 def index():
     return {"message": "Welcome to the API"}
 
+@app.get("/health-check")
+def health_check():
+    global user, serverData_thread, classify_events_thread, detect_events_thread, fetch_events
+    
+    time_stamp = user.dbUser.get_max_timestamp(frameIdentifier=user.cfg.identifier)
+    dbok = time_stamp is not None
+    socketok = serverData_thread.is_alive()
+    classify_eventsok = classify_events_thread.is_alive()
+    detect_eventsok = detect_events_thread.is_alive()
+
+    return {
+        "status": "success",
+        "database": dbok,
+        "pmuConnection": socketok,
+        "classifyingEvents": classify_eventsok,
+        "detectingEvents": detect_eventsok
+    }
+
 @app.post("/connect-server")
 async def connect_to_server(event_settings: ServerInfoSettings):
-    global user
-    global serverData_thread
-    global events_thread
+    global user, serverData_thread, classify_events_thread, detect_events_thread, IDI_thread
     
     if not event_settings.ip or not event_settings.port:
         raise HTTPException(status_code=400, detail="Bad request from the client")
 
     user = client(event_settings.ip, event_settings.port)
     serverData_thread = threading.Thread(target=user.receive)
-    events_thread = threading.Thread(target=user.classify_events)
+    classify_events_thread = threading.Thread(target=user.classify_events)
+    detect_events_thread = threading.Thread(target=user.detect_events)
+    IDI_thread = threading.Thread(target=user.process_IDI_data)
     
     try:
         serverData_thread.start()
@@ -152,7 +187,9 @@ async def connect_to_server(event_settings: ServerInfoSettings):
         await asyncio.sleep(2)
         while not user.checkDbUpdates():
             await asyncio.sleep(1)
-        events_thread.start()
+        detect_events_thread.start()
+        IDI_thread.start()
+        # classify_events_thread.start()
         res = {
             "status": "success",
             "status_code": 200,
@@ -208,18 +245,19 @@ async def event_analytics(event_settings: EventAnalyticsSettings):
 @app.get("/conn-details")
 async def connection_details():
     global serverData_thread
-    global events_thread
+    global classify_events_thread, detect_events_thread
 
     time_stamp = user.dbUser.get_max_timestamp(frameIdentifier=user.cfg.identifier)
     dbok = time_stamp is not None
     socketok = serverData_thread.is_alive()
-    eventsok = events_thread.is_alive()
+    classify_eventsok = classify_events_thread.is_alive()
+    detect_eventsok = detect_events_thread.is_alive()
     
     if socketok and dbok:
         res = {
             "status": "success",
             "status_code": 200,
-            "message": "connection is successfully established " + "and classifying events" if eventsok else "",
+            "message": "connection is successfully established " + "and detecting and classifying events" if classify_eventsok and detect_eventsok else "",
         }
     else:
         res = {
@@ -295,11 +333,15 @@ async def send_data(event_settings: DataServerSettings):
     }
     return res
 
+@app.post('/IDIdata-server')
+async def inertia_distribution_data(event_settings: DataServerSettings, db: Session = Depends(get_db)):
+
+    pass
+
 @app.post("/close-conn")
 async def close_connection():
     global user
-    global serverData_thread
-    global events_thread
+    global serverData_thread, classify_events_thread, detect_events_thread, IDI_thread
 
     res = {
         "status": "failed",
@@ -313,9 +355,15 @@ async def close_connection():
         if serverData_thread.is_alive():
             serverData_thread.join()
             print("Stopped receiving data")
-        if events_thread.is_alive():
-            events_thread.join()
+        if detect_events_thread.is_alive():
+            detect_events_thread.join()
+            print("Stopped detecting events")
+        if classify_events_thread.is_alive():
+            classify_events_thread.join()
             print("Stopped classifying events")
+        if IDI_thread.is_alive():
+            IDI_thread.join()
+            print("Stopped IDI processing")
         res =  {
             "status":"success",
             "status_code": 200,
@@ -374,6 +422,7 @@ async def detect_event(event_settings: EventDetectionSettings):
         float(event_settings.windowSize),
         float(event_settings.sd_th),
     )
+    
     if res and res["fault"]:
         return res
     return {"fault": False}

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   Box,
   Button,
@@ -18,14 +18,46 @@ import TwitterIcon from "@mui/icons-material/Twitter";
 import GitHubIcon from "@mui/icons-material/GitHub";
 import { useTheme } from "@mui/material/styles";
 import { useNavigate } from "react-router-dom";
+import parseCSV from "./../utils/parseCSV";
+import formatData from "./../utils/formatData";
+import LinearBuffer from "./Common/Loading";
 
 const HomePage = () => {
   const theme = useTheme();
   const navigate = useNavigate();
   const isDarkMode = theme.palette.mode === "dark";
+  const [isLoading, setIsLoading] = useState(false);
+  const [uploadedData, setUploadedData] = useState(null);
 
-  const handleFileUpload = (event) => {
-    navigate("/analyse", { state: { file: event.target.files[0] } });
+  const handleImportNewFileButton = async (selectedFile) => {
+    if (selectedFile) {
+      try {
+        setIsLoading(true);
+        let data = await parseCSV(selectedFile);
+        let time;
+        [time, data] = await formatData(data);
+
+        const subLnData = {};
+        Object.keys(data).forEach((item) => {
+          const parts = item.split(":");
+          const subKey = `Sub:${parts[1]}`;
+          const lnValue = parts[2] + ":" + parts[3];
+          if (!subLnData[subKey]) subLnData[subKey] = [];
+          subLnData[subKey].push(lnValue);
+        });
+
+        setIsLoading(false);
+        setUploadedData({ subLnData, data, time });
+        navigate("/select-route", { state: [subLnData, data, time] });
+      } catch (error) {
+        console.error("Error:", error);
+      }
+    }
+  };
+
+  const handleImportFile = (event) => {
+    const file = event.target.files[0];
+    handleImportNewFileButton(file);
   };
 
   const handleConnectServer = () => {
@@ -64,29 +96,30 @@ const HomePage = () => {
           backgroundImage: `url(${isDarkMode ? "/electrical_back.png" : "/electrical_back.png"})`,
           backgroundSize: "contain",
           backgroundPosition: "center",
-          // backgroundRepeat: "no-repeat",
-          width: "100%", height: "100%",
+          width: "100%",
+          height: "100%",
           textAlign: "center",
           py: 12,
           position: "relative",
         }}
       >
-
-        {/* Overlay for better text visibility */}
-        <Box sx={{ 
-          position: "absolute", 
-          top: 0, left: 0, 
-          width: "100%", height: "100%", 
-          backgroundColor: isDarkMode ? "rgba(0, 0, 0, 0.7)" : "rgba(255, 255, 255, 0.9)", 
-        }} />
+        <Box
+          sx={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            backgroundColor: isDarkMode
+              ? "rgba(0, 0, 0, 0.7)"
+              : "rgba(255, 255, 255, 0.9)",
+          }}
+        />
         <Container sx={{ position: "relative", zIndex: 1 }}>
           <Typography variant="h3" fontWeight="bold" sx={{ mb: 2 }}>
             Power System Event Detection & Analysis
           </Typography>
-          <Typography
-            variant="h6"
-            sx={{ maxWidth: "700px", mx: "auto", mb: 4 }}
-          >
+          <Typography variant="h6" sx={{ maxWidth: "700px", mx: "auto", mb: 4 }}>
             Advanced AI-powered analytics for detecting faults, oscillations, and real-time monitoring.
           </Typography>
           <Grid container spacing={3} justifyContent="center">
@@ -122,7 +155,7 @@ const HomePage = () => {
                 }}
               >
                 Upload File
-                <input type="file" hidden onChange={handleFileUpload} />
+                <input type="file" hidden onChange={handleImportFile} />
               </Button>
             </Grid>
           </Grid>
@@ -159,6 +192,9 @@ const HomePage = () => {
           ))}
         </Grid>
       </Container>
+
+      {/* Loading Indicator */}
+      {isLoading && <LinearBuffer />}
 
       {/* Footer */}
       <Box sx={{ backgroundColor: theme.palette.background.paper, py: 4, mt: 6 }}>

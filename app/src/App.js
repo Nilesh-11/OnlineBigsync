@@ -21,6 +21,8 @@ import OSLP from './Components/File/OSLP'
 import LiveDash from './Components/OnlineData/LiveDashboard'
 import LiveHome from './Components/OnlineData/LiveHome';
 import Test from './Components/test'
+import LiveEventAnalytics from './Components/OnlineData/LiveEventAnalytics';
+import SelectRoutePage from './Components/File/SelectRoutePage';
 
 function App() {
   
@@ -50,8 +52,10 @@ function App() {
               <Route path="/baseline" element={<Baseliner></Baseliner>}></Route>
               <Route path="/oscillation-characterisation" element={<ModeAnalysis></ModeAnalysis>}></Route>
               <Route path="/oscillation-source-location" element={<OSLP></OSLP>}></Route>
-              <Route path="/live-dashboard" element={<LiveDash></LiveDash>}></Route>
+              <Route path="/select-route" element={<SelectRoutePage />} />
               <Route path="/live-home" element={<LiveHome></LiveHome>}></Route>
+              <Route path="/live-dashboard" element={<LiveDash></LiveDash>}></Route>
+              <Route path="/live-event-analytics" element={<LiveEventAnalytics></LiveEventAnalytics>}></Route>
               <Route path="/test" element={<Test></Test>}></Route>
             </Routes>
           </BrowserRouter>

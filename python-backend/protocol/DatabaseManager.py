@@ -221,6 +221,27 @@ class DatabaseManager:
         max_timestamp = self.fetch_all(query)[0][0]
         return max_timestamp
     
+    def get_lowerBound_timestamp(self, timestamp, frameIdentifier):
+        query = f'''
+        select time
+        from {data_table_name}
+        WHERE identifier = \'\"{frameIdentifier}\"\'
+        AND time <= \'{timestamp}\'
+        ORDER BY time DESC
+        LIMIT 1
+        '''
+        max_timestamp = self.fetch_all(query)[0][0]
+        return max_timestamp
+    
+    def get_min_timestamp(self, frameIdentifier):
+        query = f'''
+        select min(time)
+        from {data_table_name}
+        WHERE identifier = \'\"{frameIdentifier}\"\'
+        '''
+        max_timestamp = self.fetch_all(query)[0][0]
+        return max_timestamp
+    
     def get_frequency_dataframes(self, frameIdentifier, time_window_len, timestamp):
         query = f'''
         SELECT time, frequency, numberofpmu, stationname
