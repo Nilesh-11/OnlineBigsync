@@ -5,7 +5,6 @@ import dayjs from 'dayjs';
 const EventsList = React.memo(({ eventsData, eventStyles }) => {
     const eventTypes = Object.keys(eventsData);
     const [selectedTypes, setSelectedTypes] = useState(eventTypes);
-    console.log(eventTypes);
     const handleToggleType = (type) => {
         setSelectedTypes((prev) =>
             prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]

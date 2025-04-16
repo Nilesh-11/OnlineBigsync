@@ -1,0 +1,39 @@
+services:
+  backend:
+    build:
+      context: ./python-backend
+    ports:
+      - "8080:8080"
+    environment:
+      - BIGSYNC_DATABASE_URL=postgresql+psycopg://postgres:acoolpassword@postgres:5432/bigsync  # Updated DB URL to use "postgres" service name
+    depends_on:
+      - postgres
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "bigsync", "-h", "postgres"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 5s
+
+  frontend:
+    build:
+      context: ./app
+    ports:
+      - "3000:3000"
+    depends_on:
+      - backend
+
+  postgres:
+    image: postgres:13
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: acoolpassword
+      POSTGRES_DB: bigsync
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "postgres", "-d", "bigsync", "-h", "localhost"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 5s

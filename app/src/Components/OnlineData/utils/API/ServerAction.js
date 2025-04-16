@@ -1,6 +1,4 @@
 const actionToServer = async([action_type, message=NaN], url) => {
-  console.log('serverAddress', url);
-  console.log(action_type, message)
   try {
       // Send the file to the server
       const response = await fetch(url, {

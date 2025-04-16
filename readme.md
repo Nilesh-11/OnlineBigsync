@@ -10,7 +10,10 @@ It uses the algorithm developed in paper "**A Novel Event Detection and Classifi
  1. Frontend : **React.js** to visualize real-time event detection and classification.
  2. Backend : **Python** for implementing algorithms discussed in the paper. It uses **fastAPI** server for API calls, **PosrgresSql** as database.
 
-## Prerequisites for installing
+## For Docker
+- run `docker-compose up --build`
+
+## Prerequisites for manually installing
 
 Make sure you have the following software installed on your system:
 - [Node.js](https://nodejs.org/) (LTS version recommended)
@@ -32,13 +35,7 @@ pip install -r requirements.txt
 ```
 ### 3. Configure Environment variables
 ```sh
-DBHOST='localhost'
-DBPORT='5432'
-DBNAME='postgres'
-DBUSERNAME='postgres'
-DBPASSWORD='acoolpassword'
-SERVER_IP='127.0.0.1'
-SERVER_PORT=8080
+BIGSYNC_DATABASE_URL=postgresql://postgres:acoolpassword@localhost:5432/bigsync
 ```
 
 ### 4. Start the backend server
@@ -64,13 +61,4 @@ npm start
 
 >The react app will be accessible at http://localhost:3000
 
-### Serve the production build
-- Installing serve package
-```sh
-npm i -S serve
-```
-- Serving the build folder using npx
-```sh
-npx serve -s build
-```
-
+## 

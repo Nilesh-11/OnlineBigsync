@@ -485,11 +485,15 @@ class client(object):
         if not model:
             raise NotImplementedError(f"Event type '{eventtype}' not supported.")
 
+        # Convert to datetime
+        mintime_dt = datetime.fromisoformat(mintime)
+        maxtime_dt = datetime.fromisoformat(maxtime)
+
         from sqlalchemy import func
 
         event = db.query(model).filter(
-            model.time[1] == mintime,
-            model.time[func.array_length(model.time, 1)] == maxtime
+            model.time[1] == mintime_dt,
+            model.time[func.array_length(model.time, 1)] == maxtime_dt
         ).first()
 
         if not event:

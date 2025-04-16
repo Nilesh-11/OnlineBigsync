@@ -1,5 +1,4 @@
 const sendData = async ([data], url) => {
-    console.log(data, url)
     try {
       const response = await fetch(url, {
         method: 'POST',

@@ -21,7 +21,6 @@ const LiveDashboard = () => {
     ];
 
     const handleMenuClick = (label) => {
-        console.log(label);
         setCurrMenu(label);
     }
 

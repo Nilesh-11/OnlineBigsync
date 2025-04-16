@@ -2,7 +2,6 @@ import { ConnectionErrorCode } from "./../_variable";
 
 const checkConnection = async(url) => {
     try {
-        // Send the file to the server
         const response = await fetch(url, {
             method: 'GET',
             headers: {

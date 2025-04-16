@@ -89,7 +89,6 @@ const EventDetection = ({
         [windowLens.data, windowLens.events, currPmu],
         serverAddress + "data-server"
       );
-      console.log(DataResp);
       if (DataResp && DataResp.status === "success") {
         updateValues(DataResp.data);
       } else {
