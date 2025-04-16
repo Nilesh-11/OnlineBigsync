@@ -1,6 +1,8 @@
-import { ConnectionErrorCode } from "./../_variable";
+import GLOBAL from "./../../../../GLOBAL";
+const serverAddress = GLOBAL.serverAddress;
 
-const closeConnection = async(url) => {
+const closeConnection = async() => {
+    const url = `${serverAddress}close-conn`;
     try {
         const response = await fetch(url, {
             method: 'POST',

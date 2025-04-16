@@ -8,8 +8,6 @@ import { indigo, purple } from '@mui/material/colors';
 import ErrorPage from './Components/ErrorPage';
 import Home from './Components/Home';
 // Offline Data imports
-// import NavBar from './Components/File/Topnav';
-import NavBar from './Components/OnlineData/TopNav';
 import DetectEvent from './Components/v-1/DetectEvent';
 import FileHome from './Components/File/FileHome';
 import Classify from './Components/File/ClassifyEvent';
@@ -41,7 +39,7 @@ function App() {
         <div>
         
           <BrowserRouter>
-          <NavBar props={[colorMode, setColorMode]}></NavBar>
+          {/* <NavBar props={[colorMode, setColorMode]}></NavBar> */}
             <Routes>
               <Route path="/" element={<Home ></Home>}></Route>
               <Route path="/error-page" element={<ErrorPage></ErrorPage>}></Route>

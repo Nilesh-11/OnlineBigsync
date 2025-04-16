@@ -42,8 +42,6 @@ const LandingPage = () => {
     }
   };
   
-  
-
   return (
     <Box
       sx={{
@@ -121,20 +119,20 @@ const LandingPage = () => {
         </Paper>
       </Container>
       <Snackbar
-  open={alert.open}
-  autoHideDuration={4000}
-  onClose={() => setAlert({ ...alert, open: false })}
-  anchorOrigin={{ vertical: "top", horizontal: "center" }}
->
-  <Alert
-    onClose={() => setAlert({ ...alert, open: false })}
-    severity={alert.severity}
-    variant="filled"
-    sx={{ width: "100%" }}
-  >
-    {alert.message}
-  </Alert>
-</Snackbar>
+        open={alert.open}
+        autoHideDuration={4000}
+        onClose={() => setAlert({ ...alert, open: false })}
+        anchorOrigin={{ vertical: "top", horizontal: "center" }}
+      >
+        <Alert
+          onClose={() => setAlert({ ...alert, open: false })}
+          severity={alert.severity}
+          variant="filled"
+          sx={{ width: "100%" }}
+        >
+          {alert.message}
+        </Alert>
+      </Snackbar>
 
     </Box>
   );

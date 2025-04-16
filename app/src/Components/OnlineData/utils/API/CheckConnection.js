@@ -12,7 +12,7 @@ const checkConnection = async(url) => {
         if (response.ok) {
             const responseData = await response.json(); // Parse the response as JSON
             if (responseData.status_code !== 200){
-                console.error('Error:', responseData.message)
+                console.error('Error:', responseData.details);
             }
             return responseData;
         }
