@@ -59,7 +59,7 @@ class client(object):
         self.threshold_values = {'stepChange': 0.1, 'oscillatoryEvent': 5.0, 'impulseEvent': 2.0, 'islandingEvent': 0.1}
         self.eventWindowLens = {'islandingEvent': 10, 'genloadLossEvent': 20, 'oscillatoryEvent':10, 'impulseEvent': 10}
         self.windowLens = {'data': 30, 'events': 3600}
-        self.station_inertia_values = {'BUS-           1': 7.38, 'BUS-           2': 2, 'BUS-           3': 0.94}
+        self.station_inertia_values = None
         self.IDI_window = 1
     
     def execute_interrupt(self):
@@ -211,6 +211,9 @@ class client(object):
                 else:
                     pass
             try:
+                if self.station_inertia_values == None:
+                    time.sleep(1)
+                    continue
                 if curr_time == None:
                     curr_time = (db.query(DataFrame.time).filter(DataFrame.identifier == self.cfg.identifier)
                                 .order_by(DataFrame.time.desc())
