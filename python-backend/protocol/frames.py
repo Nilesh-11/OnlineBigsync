@@ -320,7 +320,7 @@ class pmuData(object):
         self.trigger_reason = pmuData.TRIGGER_REASON_WORDS[int(data_bits[0:4], 2)]
         self.unlocked_time = pmuData.UNLOCKED_TIME_WORDS[int(data_bits[4:6], 2)]
         self.time_quality = pmuData.TIME_QUALITY_WORDS[int(data_bits[6:9], 2)]
-        self.PMU_sync = True if int(data_bits[13], 2) else False
+        self.pmu_sync = True if int(data_bits[13], 2) else False
         return
 
     def get_PHASORS(self, data):
@@ -390,7 +390,7 @@ class pmuData(object):
     - Trigger Reason: {self.trigger_reason}
     - Time Quality: {self.time_quality}
     - Unlocked Time: {self.unlocked_time}
-    - PMU Sync: {self.PMU_sync}
+    - PMU Sync: {self.pmu_sync}
     - Frequency: {self.freq}
     - ROCOF: {self.rocof}
     - Phasors: {self.phasors}

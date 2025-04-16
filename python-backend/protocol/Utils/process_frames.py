@@ -54,7 +54,7 @@ def process_dataFrame(frame, cfgFrame):
             process_tuples(frame, "digital"),
             [data.data_error for data in frame.pmu_data],
             [data.time_quality for data in frame.pmu_data],
-            [data.PMU_sync for data in frame.pmu_data],
+            [data.pmu_sync for data in frame.pmu_data],
             [data.trigger_reason for data in frame.pmu_data],
             )
     return data

@@ -1,21 +1,21 @@
 from protocol.frames import *
 from protocol.Utils.utils import *
 from protocol.Utils.process_frames import *
-from protocol.DatabaseManager import *
 from protocol.algos.FC_algo import *
 from protocol.algos.FD_algo import *
-from algos.event_detection  import eventDetection # temporary
 from algos.event_classification import *
 from bisect import bisect_left, bisect_right
 import socket
 import pandas as pd
 import os
+import math
 import threading
 from enum import Enum
 from datetime import timedelta
 from collections import defaultdict
+from sqlalchemy import select, desc, func, and_, text
 from protocol.Utils.dbconnection import get_db
-from protocol.Utils.model import DataFrame, InertiaDistribution
+from protocol.Utils.model import InertiaDistribution, DataFrame, ConfigurationFrame, OscillatoryEvent, IslandingEvent, GenLossEvent, LoadLossEvent, ImpulseEvent
 
 FRAME_TYPES = {
     0: dataFrame,
@@ -39,13 +39,6 @@ class client(object):
         self.ip = serverIP
         self.port = serverPort
         self.cfg = None
-        self.dbUser = DatabaseManager(
-                    host=os.environ.get('DBHOST'),
-                    port=os.environ.get('DBPORT'),
-                    dbname=os.environ.get('DBNAME'),
-                    user=os.environ.get('DBUSERNAME'),
-                    password=os.environ.get('DBPASSWORD')
-                )
         self.interrupt_event = threading.Event()
         self.interrupt_msg = None
         self.interrupt_action = None
@@ -66,11 +59,8 @@ class client(object):
         self.threshold_values = {'stepChange': 0.1, 'oscillatoryEvent': 5.0, 'impulseEvent': 2.0, 'islandingEvent': 0.1}
         self.eventWindowLens = {'islandingEvent': 10, 'genloadLossEvent': 20, 'oscillatoryEvent':10, 'impulseEvent': 10}
         self.windowLens = {'data': 30, 'events': 3600}
+        self.station_inertia_values = {'BUS-           1': 7.38, 'BUS-           2': 2, 'BUS-           3': 0.94}
         self.IDI_window = 1
-    
-    def checkDbUpdates(self):
-        time_stamp = self.dbUser.get_max_timestamp(frameIdentifier=self.cfg.identifier)
-        return bool(time_stamp is not None)
     
     def execute_interrupt(self):
         if self.interrupt_action == interruptType.SEND_DATA.value:
@@ -79,23 +69,23 @@ class client(object):
             raise NotImplementedError(f"Interrupt type({self.interrupt_action}) not implemented.")
     
     def receive(self):
+        db = next(get_db())
         client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
             client.connect((self.ip, self.port))
-            self.dbUser.run()
         except socket.error as e:
             raise ConnectionError(f"Socket error : {e}")
         print("Receiving data...")
         while True:
-            if self.interrupt_event.is_set():
-                if self.interrupt_action == interruptType.CLOSE_CONN.value:
-                    client.close()
-                    print("Closing socket...")
-                    break
-                else:
-                    self.execute_interrupt()
-                continue
             try:
+                if self.interrupt_event.is_set():
+                    if self.interrupt_action == interruptType.CLOSE_CONN.value:
+                        client.close()
+                        print("Closing socket...")
+                        break
+                    else:
+                        self.execute_interrupt()
+                        continue
                 data = client.recv(self.data_lim)
                 if len(data) == 0:
                     print("Received empty data...quitting")
@@ -104,15 +94,14 @@ class client(object):
                     client.close()
                     break
                 if(data[0:1] == b'\xaa'):
-                    self.update_data(data)
+                    self.update_data(data, db)
             except socket.error as e:
                 print(data)
                 raise ConnectionError(f"Socket errror : {e}")
-            except:
-                print(data)
-                raise RuntimeError("Error in receiving data.")
+            finally:
+                db.close()
     
-    def update_data(self, data):
+    def update_data(self, data, db):
         frame_type = get_frame_type(data[0:2])
         assert (2 <= frame_type <= 3 or frame_type == 5 or self.cfg != None), "Configuration frame not found."
 
@@ -121,43 +110,94 @@ class client(object):
                               pmuinfo = self.cfg.pmus,
                               time_base = self.cfg.time_base,
                               num_pmu = self.cfg.num_pmu)
-            data = process_dataFrame(frame, self.cfg)
+            new_data_frame = DataFrame(
+                time = frame.time,
+                identifier = self.cfg.identifier,
+                numberofpmu = frame.num_pmu,
+                streamid = frame.stream_idcode,
+                dataid = [pmu.data_idcode for pmu in self.cfg.pmus],
+                frequency = [pmu.freq for pmu in frame.pmu_data],
+                rocof = [pmu.rocof for pmu in frame.pmu_data],
+                dataerror = [pmu.data_error for pmu in frame.pmu_data],
+                timequality = [pmu.time_quality for pmu in frame.pmu_data],
+                pmusync = [pmu.pmu_sync for pmu in frame.pmu_data],
+                triggerreason = [pmu.trigger_reason for pmu in frame.pmu_data],
+            )
+            db.add(new_data_frame)
+            db.commit()
         elif frame_type == 4:
             self.command = commandFrame(data)
         elif 2 <= frame_type <= 3 or frame_type == 5:
             self.cfg = cfg1(data)
             self.cfg.identifier = generate_unique_identifier(self.ip, self.port)
-            data = process_cfg1Frame(self.cfg)
+            new_config_frame = ConfigurationFrame(
+                time = self.cfg.time,
+                identifier = self.cfg.identifier,
+                streamid = self.cfg.stream_idcode,
+                datarate = self.cfg.data_rate,
+                stationname = [pmu.stn for pmu in self.cfg.pmus],
+                dataid = [pmu.data_idcode for pmu in self.cfg.pmus],
+                nominalfrequency = [pmu.fnom for pmu in self.cfg.pmus]
+            )
+            db.add(new_config_frame)
+            db.commit()
         elif frame_type == 1:
             self.header = headerFrame(data)
         else:
             raise NotImplementedError("Not a suitable frametype")
-        
-        self.datas['data'].append(data)
-        self.datas['type'].append(frame_type)
-
-        if len(self.datas['data']) > self.store_lim:
-            self.dbUser.store_frame(self.datas['data'], self.datas['type'])
-            self.datas['data'] = []
-            self.datas['type'] = []
     
-    def get_events(self, stationName, time_len):
+    def get_events(self, stationName, time_len, db):
         events = ['loadloss', 'genloss', 'impulse', 'oscillatory', 'islanding']
-        tableNames = [loadLoss_events_table_name,
-                      genLoss_events_table_name,
-                      impulse_events_table_name,
-                      oscillatory_events_table_name]
-        max_time = self.dbUser.get_max_timestamp(self.cfg.identifier)
-        data = self.dbUser.get_all_events(tableNames, stationName, self.cfg.identifier, time_len, max_time, 20)
+        tableNames = [
+            LoadLossEvent.__tablename__,
+            GenLossEvent.__tablename__,
+            ImpulseEvent.__tablename__,
+            OscillatoryEvent.__tablename__,
+            IslandingEvent.__tablename__
+        ]
+        
+        max_time = db.query(func.max(DataFrame.time)).scalar()
+        if not max_time:
+            return {event: None for event in events}
+        
+        time_window_start = max_time - timedelta(seconds=time_len)
         res = {}
-        for j in range(len(events)):
-            event = events[j]
-            res[event] = None
-            if data[j]:
-                res[event] = {
-                    'mintime': [data[j][i][0] for i in range(len(data[j]))],
-                    'maxtime': [data[j][i][1] for i in range(len(data[j]))]
+
+        for i, tableName in enumerate(tableNames):
+            if tableName == IslandingEvent.__tablename__:
+                query = text(f"""
+                    SELECT time[1], time[array_length(time, 1)]
+                    FROM {tableName}
+                    WHERE identifier = :identifier
+                    AND :stationName = ANY(stationnames)
+                    AND time[array_length(time, 1)] BETWEEN :start_time AND :end_time
+                    LIMIT 20
+                """)
+            else:
+                query = text(f"""
+                    SELECT time[1], time[array_length(time, 1)]
+                    FROM {tableName}
+                    WHERE identifier = :identifier
+                    AND stationname = :stationName
+                    AND time[array_length(time, 1)] BETWEEN :start_time AND :end_time
+                    LIMIT 20
+                """)
+
+            data = db.execute(query, {
+                "identifier": self.cfg.identifier,
+                "stationName": stationName,
+                "start_time": time_window_start,
+                "end_time": max_time
+            }).fetchall()
+
+            if data:
+                res[events[i]] = {
+                    "mintime": [row[0] for row in data],
+                    "maxtime": [row[1] for row in data]
                 }
+            else:
+                res[events[i]] = None
+
         return res
     
     def process_IDI_data(self):
@@ -171,9 +211,7 @@ class client(object):
                 else:
                     pass
             try:
-                # print(db.query(DataFrame.time).filter(DataFrame.identifier == self.cfg.identifier))
                 if curr_time == None:
-                    print(f"Identifier in code: {repr(self.cfg.identifier)}")
                     curr_time = (db.query(DataFrame.time).filter(DataFrame.identifier == self.cfg.identifier)
                                 .order_by(DataFrame.time.desc())
                                 .limit(1)
@@ -186,13 +224,35 @@ class client(object):
                                  .scalar())
                     if next_time:
                         curr_time = next_time
-                # print("curr:", curr_time)
                 if curr_time != prev_time:
-                    data = (db.query(DataFrame.time, DataFrame.stationname, DataFrame.frequency)
-                              .filter(DataFrame.identifier == self.cfg.identifier, curr_time - self.IDI_window <= DataFrame.time,  DataFrame.time <= curr_time)
+                    rows = (db.query(DataFrame.time, DataFrame.frequency)
+                              .filter(DataFrame.identifier == self.cfg.identifier, curr_time - timedelta(seconds=self.IDI_window) <= DataFrame.time,  DataFrame.time <= curr_time)
                               .all())
-                    print("IDI data:")
-                    print(data)
+                    stationnames = (db.query(ConfigurationFrame.stationname)
+                                    .filter(ConfigurationFrame.identifier == self.cfg.identifier)
+                                    .limit(1)
+                                    .scalar())
+                    data = [{'stationname': station} for station in stationnames]
+                    fcoi = []
+                    inertia_sum = math.fsum(self.station_inertia_values.values())
+                    for i, val in enumerate(rows):
+                        fcoi.append(math.fsum([self.station_inertia_values[station] * val[1][j] for j, station in enumerate(stationnames)]) / inertia_sum)
+                    max_dk = 1e-9
+                    for i, val in enumerate(data):
+                        val['d_k'] = math.fsum([(val[1][i] - fcoi[j])**2 for j, val in enumerate(rows)])
+                        max_dk = max(val['d_k'], max_dk)
+                    for i, val in enumerate(data):
+                        val['idi'] = val['d_k'] / max_dk
+                    new_idi_data = InertiaDistribution(
+                        time = curr_time,
+                        identifier = self.cfg.identifier,
+                        numberofpmu = len(data),
+                        stationnames = stationnames,
+                        d_k = [val['d_k'] for val in data],
+                        idi = [val['idi'] for val in data]
+                    )
+                    db.add(new_idi_data)
+                    db.commit()
                     prev_time = curr_time
             finally:
                 db.close()
@@ -200,34 +260,39 @@ class client(object):
     def get_IDI_data(self):
         pass
     
-    def get_data(self, stationName, data_time_len, events_time_len):
-        max_time = self.dbUser.get_max_timestamp(self.cfg.identifier)
-        res = self.get_frequency_time(data_time_len, max_time)
-        res = {
-            'time': res['time'],
-            'num_pmu': res['num_pmu'],
-            'pmus': [{'stationname': station, 'frequency': res['pmus'][station]['frequency']} for station in res['pmus']]
-        }
-        data = self.get_events(stationName, events_time_len)
-        res['events'] = data
+    def get_frequency_time(self, data_window, max_time, db):
+        data_frames = (db.query(DataFrame)
+                            .filter(DataFrame.time >= max_time - timedelta(seconds=data_window), DataFrame.identifier == self.cfg.identifier)
+                            .order_by(DataFrame.time.asc())
+                            .all())
+        stationNames = (db.query(ConfigurationFrame.stationname)
+                       .filter(ConfigurationFrame.identifier == self.cfg.identifier)
+                       .scalar())
+        res = {}
+        res['pmus'] = []
+        res['time'] = []
+        res['num_pmu'] = data_frames[0].numberofpmu
+        for j in range(res['num_pmu']):
+            res['pmus'].append({
+                'stationname': stationNames[j],
+                'frequency': []
+            })
+        for i, frame in enumerate(data_frames):
+            for j in range(res['num_pmu']):
+                res['pmus'][j]['frequency'].append(frame.frequency[j])
+            res['time'].append(frame.time)
         return res
     
-    def get_frequency_time(self, time_window, timestamp):
-        if timestamp is None:
-            print("Data not found")
-            return None
-        data = self.dbUser.get_frequency_dataframes(self.cfg.identifier, time_window, timestamp)
-        num_pmu = data[0][2]
-        station_names = data[0][3]
-        res = {
-            'time': [d[0] for d in data],
-            'num_pmu': num_pmu,
-            'pmus': {station_names[j] : {'frequency': [d[1][j] for d in data] } for j in range(num_pmu)}
-        }
-        
+    def get_data(self, stationName, data_window, events_window, db):
+        max_time = db.query(func.max(DataFrame.time)).scalar()
+        if max_time is None:
+            return {"error": "No data available in database."}
+        res = self.get_frequency_time(data_window, max_time, db)
+        res['events'] = self.get_events(stationName, events_window, db)
         return res
     
     def detect_events(self):
+        db = next(get_db())
         prev_max_time = None
         while True:
             try:
@@ -237,29 +302,25 @@ class client(object):
                     else:
                         pass
                 assert self.event_detection_param['windowLen'] == self.eventWindowLens['islandingEvent'], "islanding event and event detection window is not same"
-                
-                max_time = self.dbUser.get_max_timestamp(self.cfg.identifier)
+                max_time = db.query(func.max(DataFrame.time)).filter(DataFrame.identifier == self.cfg.identifier).scalar()
                 if prev_max_time is None or max_time == prev_max_time:
                     prev_max_time = max_time
                     continue
                 prev_max_time = max_time
-                
-                self.db_data = self.get_frequency_time(self.eventWindowLens['islandingEvent'], max_time)
-                
+                self.db_data = self.get_frequency_time(self.eventWindowLens['islandingEvent'], max_time, db)
                 if self.db_data is None:
                     continue
-            
-                left_index = bisect_left(self.db_data['time'], max_time - timedelta(self.eventWindowLens['islandingEvent']))
+                left_index = bisect_left(self.db_data['time'], max_time - timedelta(seconds=self.eventWindowLens['islandingEvent']))
                 
                 data = {}
                 data['pmus'] = {}
                 data['time'] = self.db_data['time'][left_index: ]
-                for pmu in self.db_data['pmus']:
-                    data['pmus'][pmu] = {
+                for i, pmu in enumerate(self.db_data['pmus']):
+                    pmuName = pmu['stationname']
+                    data['pmus'][pmuName] = {
                         'freq': []
                     }
-                    data['pmus'][pmu]['freq'] = self.db_data['pmus'][pmu]['frequency'][left_index: ]
-                
+                    data['pmus'][pmuName]['freq'] = pmu['frequency'][left_index: ]
                 if len(data['pmus'].keys()) > 1:
                     freq_data = []
                     time_data = data['time']
@@ -268,18 +329,20 @@ class client(object):
                     classifiedData, isFault = islandingEventClassification(freq_data, time_data, self.threshold_values['islandingEvent'])
                     res = []
                     if isFault:
-                        res.append(self.cfg.identifier)
-                        res.append(len(data['pmus']))
-                        res.append([pmu for pmu in data['pmus'].keys()])
-                        res.append(freq_data)
-                        res.append(time_data)
-                        res.append(self.threshold_values['islandingEvent'])
-                        self.dbUser.store_events(res, 'islanding')
-                        
+                        new_islandingEvent = IslandingEvent(
+                            identifier = self.cfg.identifier,
+                            stationscount = len(data['pmus']),
+                            stationnames = [pmu for pmu in data['pmus'].keys()],
+                            frequency = freq_data,
+                            threshold = self.threshold_values['islandingEvent']
+                        )
+                        db.add(new_islandingEvent)
+                        db.commit()
+                
                 for pmu in data['pmus']:
                     fault_data, isDetected = getFault(data['pmus'][pmu]['freq'], data['time'], self.event_detection_param['rocof_sd_threshold'])
                     if isDetected:
-                        curr_minTime_ptr = max(self.dbUser.get_min_timestamp(self.cfg.identifier), min(data['time']) - timedelta(seconds=int(self.event_classify_buffer)))
+                        curr_minTime_ptr = max(db.query(func.min(ConfigurationFrame.time)).filter(ConfigurationFrame.identifier == self.cfg.identifier).scalar(), min(data['time']) - timedelta(seconds=int(self.event_classify_buffer)))
                         assert curr_minTime_ptr <= min(self.db_data['time']), "Time error"
                         curr_maxTime_ptr = max_time + timedelta(seconds=int(self.event_classify_buffer))
                         if not self.event_ptr[pmu]['minTime_ptr']:
@@ -300,9 +363,12 @@ class client(object):
             except Exception as e:
                 print(f"An error occurred in fault detection: {str(e)}")
                 return {'error': 'An unexpected error occurred'}, False
+            finally:
+                db.close()
     
     def classify_events(self):
         print("Started detecting and classifying events...")
+        db = next(get_db())
         while True:
             try:
                 if self.interrupt_event.is_set():
@@ -314,24 +380,25 @@ class client(object):
                     time.sleep(0.2)
                     continue
                 
-                for pmu in self.db_data['pmus']:
-                    if self.event_ptr[pmu]["minTime_ptr"] is None:
+                for i, pmu in enumerate(self.db_data['pmus']):
+                    pmuName = pmu['stationname']
+                    if self.event_ptr[pmuName]["minTime_ptr"] is None:
                         time.sleep(0.2)
                         continue
-                    if self.event_ptr[pmu]['currTime_ptr'] > min(self.event_ptr[pmu]['maxTime_ptr'], self.db_data['time'][-1]):
+                    if self.event_ptr[pmuName]['currTime_ptr'] > min(self.event_ptr[pmuName]['maxTime_ptr'], self.db_data['time'][-1]):
                         time.sleep(0.2)
                         continue
                     faults = defaultdict(lambda: {})
                     eventsData = defaultdict(lambda: defaultdict(lambda: {'freq': [], 'time': []}))
 
                     for event in self.eventWindowLens.keys():
-                        assert self.event_ptr[pmu]['currTime_ptr'] <= max(self.db_data['time']), self.event_ptr[pmu]
+                        assert self.event_ptr[pmuName]['currTime_ptr'] <= max(self.db_data['time']), self.event_ptr[pmuName]
                         window_len = self.eventWindowLens[event]
-                        left_index = bisect_left(self.db_data['time'], self.event_ptr[pmu]['currTime_ptr'] - timedelta(seconds=window_len))
-                        right_index = bisect_right(self.db_data['time'], self.event_ptr[pmu]['currTime_ptr'])
+                        left_index = bisect_left(self.db_data['time'], self.event_ptr[pmuName]['currTime_ptr'] - timedelta(seconds=window_len))
+                        right_index = bisect_right(self.db_data['time'], self.event_ptr[pmuName]['currTime_ptr'])
                         if left_index > right_index:
                             right_index = left_index
-                        eventsData[event]['freq'] = self.db_data['pmus'][pmu]['frequency'][left_index: right_index]
+                        eventsData[event]['freq'] = self.db_data['pmus'][i]['frequency'][left_index: right_index]
                         eventsData[event]['time'] = self.db_data['time'][left_index: right_index]
                     
                     freq_data = eventsData['oscillatoryEvent']['freq']
@@ -340,14 +407,17 @@ class client(object):
                         classifiedData, isFault = oscillatoryEventClassification(freq_data, time_data, self.threshold_values['oscillatoryEvent'])
                         res = []
                         if isFault:
-                            res.append(self.cfg.identifier)
-                            res.append(pmu)
-                            res.append(freq_data)
-                            res.append(classifiedData[0]) # power
-                            res.append(classifiedData[1]) # fft frequency
-                            res.append(time_data)
-                            res.append(self.threshold_values['oscillatoryEvent'])
-                            self.dbUser.store_events(res, 'oscillatory')
+                            new_oscillatoryEvent = OscillatoryEvent(
+                                identifier = self.cfg.identifier,
+                                stationname = pmuName,
+                                frequency = freq_data,
+                                power = classifiedData[0],
+                                fftfrequency = classifiedData[1],
+                                time = time_data,
+                                threshold = self.threshold_values['oscillatoryEvent']
+                            )
+                            db.add(new_oscillatoryEvent)
+                            db.commit()
                         faults['oscillatory'] = isFault
                     
                     freq_data = eventsData['impulseEvent']['freq']
@@ -356,13 +426,16 @@ class client(object):
                         classifiedData, isFault = impulseEventClassification(freq_data, time_data, self.threshold_values['impulseEvent'])
                         res = []
                         if isFault:
-                            res.append(self.cfg.identifier)
-                            res.append(pmu)
-                            res.append(freq_data)
-                            res.append(classifiedData[0]) # rocof
-                            res.append(time_data)
-                            res.append(self.threshold_values['impulseEvent'])
-                            self.dbUser.store_events(res, 'impulse')
+                            new_impulseEvent = ImpulseEvent(
+                                identifier = self.cfg.identifier,
+                                stationname = pmuName,
+                                frequency = freq_data,
+                                rocof = classifiedData[0],
+                                time = time_data,
+                                threshold = self.threshold_values['impulseEvent']
+                            )
+                            db.add(new_impulseEvent)
+                            db.commit()
                         faults['impulse'] = isFault
                     
                     freq_data = eventsData['genloadLossEvent']['freq']
@@ -371,64 +444,92 @@ class client(object):
                         classifiedData, isFault = gen_load_LossClassification(freq_data, time_data, self.threshold_values['stepChange'])
                         res = []
                         if isFault:
-                            res.append(self.cfg.identifier)
-                            res.append(pmu)
-                            res.append(freq_data)
-                            res.append(time_data)
-                            res.append(self.threshold_values['stepChange'])
-                            self.dbUser.store_events(res, 'genLoss' if classifiedData[-1] == 'gen' else 'loadLoss')
+                            if classifiedData[-1] == 'gen':
+                                new_genLossEvent = GenLossEvent(
+                                    identifier = self.cfg.identifier,
+                                    stationname = pmuName,
+                                    frequency = freq_data,
+                                    time = time_data,
+                                    threshold = self.threshold_values['stepChange']
+                                )
+                                db.add(new_genLossEvent)
+                                db.commit()
+                            else:
+                                new_loadLossEvent = LoadLossEvent(
+                                    identifier = self.cfg.identifier,
+                                    stationname = pmuName,
+                                    frequency = freq_data,
+                                    time = time_data,
+                                    threshold = self.threshold_values['stepChange']
+                                )
+                                db.add(new_loadLossEvent)
+                                db.commit()
                         faults['genloadLoss'] = isFault
-                    self.event_ptr[pmu]['currTime_ptr'] += timedelta(seconds=self.event_classify_step)
+                    self.event_ptr[pmuName]['currTime_ptr'] += timedelta(seconds=self.event_classify_step)
             except Exception as e:
                 print(f"An error occurred in fault classification: {str(e)}")
                 return {'error': 'An unexpected error occurred'}, False
+            finally:
+                db.close()
 
-    def get_event_analytics(self, eventtype, mintime, maxtime):
-        data = None
-        res = None
+    def get_event_analytics(self, eventtype: str, mintime: str, maxtime: str, db):
+        model_map = {
+            'oscillatory': OscillatoryEvent,
+            'impulse': ImpulseEvent,
+            'genloss': GenLossEvent,
+            'loadloss': LoadLossEvent,
+            'islanding': IslandingEvent
+        }
+
+        model = model_map.get(eventtype)
+        if not model:
+            raise NotImplementedError(f"Event type '{eventtype}' not supported.")
+
+        from sqlalchemy import func
+
+        event = db.query(model).filter(
+            model.time[1] == mintime,
+            model.time[func.array_length(model.time, 1)] == maxtime
+        ).first()
+
+        if not event:
+            return {}
+
         if eventtype == 'oscillatory':
-            data = self.dbUser.get_oscillatory_data(mintime, maxtime)
-            res = {
-                'stationname': data[0][0],
-                'freq': data[0][1],
-                'power': data[0][2],
-                'fft': data[0][3],
-                'time': data[0][4],
-                'threshold': data[0][5]
+            return {
+                'stationname': event.stationname,
+                'freq': event.frequency,
+                'power': event.power,
+                'fft': event.fftfrequency,
+                'time': event.time,
+                'threshold': event.threshold
             }
         elif eventtype == 'impulse':
-            data = self.dbUser.get_impulse_data(mintime, maxtime)
-            res = {
-                'stationname': data[0][0],
-                'freq': data[0][1],
-                'rocof': data[0][2],
-                'time': data[0][3],
-                'threshold': data[0][4]
+            return {
+                'stationname': event.stationname,
+                'freq': event.frequency,
+                'rocof': event.rocof,
+                'time': event.time,
+                'threshold': event.threshold
             }
         elif eventtype == 'genloss':
-            data = self.dbUser.get_genloss_data(mintime, maxtime)
-            res = {
-                'stationname': data[0][0],
-                'freq': data[0][1],
-                'time': data[0][2],
-                'threshold': data[0][3]
+            return {
+                'stationname': event.stationname,
+                'freq': event.frequency,
+                'time': event.time,
+                'threshold': event.threshold
             }
         elif eventtype == 'loadloss':
-            data = self.dbUser.get_loadloss_data(mintime, maxtime)
-            res = {
-                'stationname': data[0][0],
-                'freq': data[0][1],
-                'time': data[0][2],
-                'threshold': data[0][3]
+            return {
+                'stationname': event.stationname,
+                'freq': event.frequency,
+                'time': event.time,
+                'threshold': event.threshold
             }
         elif eventtype == 'islanding':
-            data = self.dbUser.get_islanding_data(mintime, maxtime)
-            res = {
-                'stationnames': data[0][0],
-                'freq': data[0][1],
-                'time': data[0][2],
-                'threshold': data[0][3]
+            return {
+                'stationnames': event.stationnames,
+                'freq': event.frequency,
+                'time': event.time,
+                'threshold': event.threshold
             }
-        else:
-            raise NotImplementedError
-        return res

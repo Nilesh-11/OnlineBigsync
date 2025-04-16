@@ -1,11 +1,9 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException as StarletteHTTPException
-from pydantic import BaseModel
 from fastapi import HTTPException
 import numpy as np
-from typing import List, Dict, Optional
 
 import json
 from algos.event_detection import eventDetection
@@ -13,23 +11,24 @@ from algos.event_classification import eventClassification
 from algos.event_classification_islanding import classifyIslandingEvent
 from algos.baselining import findStats
 from algos.Algorithms.EWT.EWT_Main import EWTmainFunction
-from typing import List
 from algos.Algorithms.window_selection import windowSelection
 from algos.Algorithms.Prony.prony3 import pronyAnalysis
 from algos.Algorithms.OSLP.main import oslp_main
 from protocol.client import *
-from protocol.algos.FD_algo import * # temporary
 import asyncio
 import threading
-import random
+from schemas.request import *
 from sqlalchemy.orm import Session
+from sqlalchemy.sql import func
 from dotenv import load_dotenv
 from protocol.Utils.dbconnection import Base, engine
-from protocol.Utils.model import InertiaDistribution
+from protocol.Utils.model import InertiaDistribution, DataFrame, ConfigurationFrame
+from dotenv import load_dotenv
+
 load_dotenv()
 
-InertiaDistribution.__table__.create(bind=engine, checkfirst=True)
-# Base.metadata.create_all(bind=engine)
+# Creates all tables that don't already exist
+Base.metadata.create_all(bind=engine)
 
 user=None
 serverData_thread = None
@@ -47,80 +46,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-class EventDetectionSettings(BaseModel):
-    time : List[float]
-    windowSize: float = None
-    sd_th: float = None
-    data: List[float]
-
-class EventClassificationSettings(BaseModel):
-    time: List[float]
-    data: List[float]
-    thresholdValues: Dict[str, float]
-
-class IslandingEventClassificationSettings(BaseModel):
-    time: List[float]
-    data: List[List[float]]
-    thresholdValues: dict
-
-class StatisticsSettings(BaseModel):
-    data: List[float]
-
-class ModeAnalysisSettings(BaseModel):
-    data: List[float]
-
-class OSLPSettings(BaseModel):
-    time : List[float]
-    data: Dict[str, Dict[str, List[float]]] = {
-    "Sub1-l1": {
-            'F': [0.0] * 5000,
-            'V': [0.0] * 5000,
-            'VA': [0.0] * 5000,
-            'I': [0.0] * 5000,
-            'IA': [0.0] * 5000
-        }
-    }
-    points:List[float]
-
-class ServerInfoSettings(BaseModel):
-    ip: str
-    port: int
-
-class ServerInterruptSettings(BaseModel):
-    action: int
-    msg: str
-
-class DataServerSettings(BaseModel):
-    stationName: Optional[str]
-    data_time_len: int
-    events_time_len: int
-
-class parameterWindowLensSettings(BaseModel):
-    events: int
-    data: int
-
-class parameterEventLenSettings(BaseModel):
-    islandingEvent: int
-    genloadLossEvent: int
-    oscillatoryEvent: int
-    impulseEvent: int
-
-class parameterThresholdSettings(BaseModel):
-    stepChange: float
-    islandingEvent: float
-    oscillatoryEvent: float
-    impulseEvent: float
-
-class EventAnalyticsSettings(BaseModel):
-    mintime: str
-    maxtime: str
-    eventtype: str
-
-class TestSettings(BaseModel):
-    data_freq: List[float]
-    data_time: List[float]
-    threshold: float
 
 @app.post('/test')
 def test(event_settings: TestSettings):
@@ -178,6 +103,7 @@ async def connect_to_server(event_settings: ServerInfoSettings):
     
     try:
         serverData_thread.start()
+        print("done")
         sessionID = generate_unique_identifier(event_settings.ip, event_settings.port)
         defaultData = {
             "threshold_values": user.threshold_values,
@@ -185,11 +111,9 @@ async def connect_to_server(event_settings: ServerInfoSettings):
             "window_lens": user.windowLens
         }
         await asyncio.sleep(2)
-        while not user.checkDbUpdates():
-            await asyncio.sleep(1)
         detect_events_thread.start()
         IDI_thread.start()
-        # classify_events_thread.start()
+        classify_events_thread.start()
         res = {
             "status": "success",
             "status_code": 200,
@@ -213,13 +137,13 @@ async def connect_to_server(event_settings: ServerInfoSettings):
     return res
 
 @app.post("/live-events-analytics")
-async def event_analytics(event_settings: EventAnalyticsSettings):
+async def event_analytics(event_settings: EventAnalyticsSettings, db: Session = Depends(get_db) ):
     if not event_settings.mintime or not event_settings.maxtime or not event_settings.eventtype:
         raise HTTPException(status_code=400, detail="Bad request from the client")
     
     global user
 
-    data = user.get_event_analytics(event_settings.eventtype, event_settings.mintime, event_settings.maxtime)
+    data = user.get_event_analytics(event_settings.eventtype, event_settings.mintime, event_settings.maxtime, db)
     
     try:
         res = {
@@ -243,29 +167,61 @@ async def event_analytics(event_settings: EventAnalyticsSettings):
     return res
 
 @app.get("/conn-details")
-async def connection_details():
+async def connection_details(db: Session = Depends(get_db)):
     global serverData_thread
-    global classify_events_thread, detect_events_thread
+    global classify_events_thread, detect_events_thread, IDI_thread
 
-    time_stamp = user.dbUser.get_max_timestamp(frameIdentifier=user.cfg.identifier)
+    time_stamp = db.query(func.max(DataFrame.time)).scalar()
     dbok = time_stamp is not None
     socketok = serverData_thread.is_alive()
     classify_eventsok = classify_events_thread.is_alive()
     detect_eventsok = detect_events_thread.is_alive()
-    
+    IDI_ok = IDI_thread.is_alive()
+    all_threads_ok = socketok and classify_eventsok and detect_eventsok and IDI_ok
+
     if socketok and dbok:
-        res = {
+        message_parts = ["Connection to database and socket is healthy."]
+        if classify_eventsok:
+            message_parts.append("Event classification is running.")
+        else:
+            message_parts.append("Event classification is NOT running.")
+
+        if detect_eventsok:
+            message_parts.append("Event detection is running.")
+        else:
+            message_parts.append("Event detection is NOT running.")
+
+        if IDI_ok:
+            message_parts.append("IDI computation is active.")
+        else:
+            message_parts.append("IDI computation is NOT active.")
+
+        return {
             "status": "success",
             "status_code": 200,
-            "message": "connection is successfully established " + "and detecting and classifying events" if classify_eventsok and detect_eventsok else "",
+            "message": " ".join(message_parts),
+            "components": {
+                "database": dbok,
+                "socket": socketok,
+                "event_classification": classify_eventsok,
+                "event_detection": detect_eventsok,
+                "idi_thread": IDI_ok
+            }
         }
-    else:
-        res = {
-            "status": "failed",
-            "status_code": 500,
-            "message": "An unexpected error occurred.",
+
+    return {
+        "status": "failed",
+        "status_code": 500,
+        "message": "Connection failed. Either socket or database is not reachable.",
+        "components": {
+            "database": dbok,
+            "socket": socketok,
+            "event_classification": classify_eventsok,
+            "event_detection": detect_eventsok,
+            "idi_thread": IDI_ok
         }
-    return res
+    }
+
 
 @app.post('/set-parameters-threshold')
 async def set_threshold_parameters(event_settings: parameterThresholdSettings):
@@ -321,10 +277,10 @@ async def set_eventLens_parameters(event_settings: parameterEventLenSettings):
     }
 
 @app.post('/data-server')
-async def send_data(event_settings: DataServerSettings):
+async def send_data(event_settings: DataServerSettings, db: Session = Depends(get_db)):
     if not event_settings.data_time_len or not event_settings.events_time_len:
         raise HTTPException(status_code=400, detail="Bad request from the client")
-    data = user.get_data(event_settings.stationName, event_settings.data_time_len, event_settings.events_time_len)
+    data = user.get_data(event_settings.stationName, event_settings.data_time_len, event_settings.events_time_len, db)
     res = {
         "status": "success",
         "status_code": 200,
@@ -333,10 +289,50 @@ async def send_data(event_settings: DataServerSettings):
     }
     return res
 
-@app.post('/IDIdata-server')
-async def inertia_distribution_data(event_settings: DataServerSettings, db: Session = Depends(get_db)):
+@app.get('/live/IDI/stations')
+async def all_stations(db: Session = Depends(get_db)):
+    global user
+    try:
+        stationnames = (db.query(ConfigurationFrame.stationname)
+                    .filter(ConfigurationFrame.identifier == user.cfg.identifier)
+                    .limit(1)
+                    .scalar())
+        return { 'status': "success", 'stations': stationnames}
+    except Exception as e:
+        print("An error occurred in fething fetching all the stationnames:", e)
+        return { 'status': "success", 'details': "An error occurred"}
 
-    pass
+@app.post('/live/IDI/stations')
+async def set_stations_inertia(request: SetStationInertiaRequest, db: Session = Depends(get_db)):
+    global user
+    user.station_inertia_values = request.stations
+    return {'status': "success"}
+
+@app.post('/live/IDI/data')
+async def inertia_distribution_data(request: DataIDIRequest, db: Session = Depends(get_db)):
+    global user
+    time_window = request.window
+    try:
+        max_time = db.query(func.max(InertiaDistribution.time))\
+                    .filter(InertiaDistribution.identifier == user.cfg.identifier)\
+                    .scalar()
+        if max_time:
+            data = db.query(InertiaDistribution)\
+                .filter(
+                    InertiaDistribution.identifier == user.cfg.identifier,
+                    InertiaDistribution.time >= max_time - timedelta(seconds=time_window),
+                    InertiaDistribution.time <= max_time
+                ).all()
+            stations = [record.stationnames for record in data]
+            times = [record.time for record in data]
+            d_k = [record.d_k for record in data]
+            idi = [record.idi for record in data]
+        else:
+            return {'status': "error", 'details': "No data"}
+        return {'status':"success", 'data': {'time': times, 'stations': stations, 'd_k': d_k, 'idi': idi}}
+    except Exception as e:
+        print("Error occurred with idi data:", e)
+        return {'status': "error", 'details': "an error occurred"}
 
 @app.post("/close-conn")
 async def close_connection():
