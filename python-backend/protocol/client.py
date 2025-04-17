@@ -239,7 +239,7 @@ class client(object):
                     fcoi = []
                     inertia_sum = math.fsum(self.station_inertia_values.values())
                     for i, val in enumerate(rows):
-                        fcoi.append(math.fsum([self.station_inertia_values[station] * val[1][j] for j, station in enumerate(stationnames)]) / inertia_sum)
+                        fcoi.append(math.fsum([self.station_inertia_values[station]  * val[1][j] if "gen" in station.lower() else 0 for j, station in enumerate(stationnames)]) / inertia_sum)
                     max_dk = 1e-9
                     for i, val in enumerate(data):
                         val['d_k'] = math.fsum([(val[1][i] - fcoi[j])**2 for j, val in enumerate(rows)])
