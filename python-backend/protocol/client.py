@@ -240,12 +240,18 @@ class client(object):
                     inertia_sum = math.fsum(self.station_inertia_values.values())
                     for i, val in enumerate(rows):
                         fcoi.append(math.fsum([self.station_inertia_values[station]  * val[1][j] if "gen" in station.lower() else 0 for j, station in enumerate(stationnames)]) / inertia_sum)
-                    max_dk = 1e-9
+                    max_dk = 0
                     for i, val in enumerate(data):
                         val['d_k'] = math.fsum([(val[1][i] - fcoi[j])**2 for j, val in enumerate(rows)])
                         max_dk = max(val['d_k'], max_dk)
                     for i, val in enumerate(data):
-                        val['idi'] = val['d_k'] / max_dk
+                        if max_dk < 1e-3 and val['d_k'] < 1e-3:
+                            val['idi'] = 0
+                        elif max_dk != 0:
+                            val['idi'] = val['d_k'] / max_dk
+                        else:
+                            val['idi'] = val['d_k']
+                    
                     new_idi_data = InertiaDistribution(
                         time = curr_time,
                         identifier = self.cfg.identifier,
