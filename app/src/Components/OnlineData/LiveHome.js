@@ -28,6 +28,7 @@ const LandingPage = () => {
     setIsSubmitting(true);
     const responseData = await connectToServer([ip, port], serverAddress + "connect-server", navigate);
     setIsSubmitting(false);
+    console.log(responseData);
   
     if (responseData.status === "success") {
       navigate("/live-dashboard", {

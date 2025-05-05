@@ -53,6 +53,7 @@ class client(object):
             "minTime_ptr": None,
             "currTime_ptr": None
         })
+        self.stationNames = None
         self.event_classify_buffer = 30
         self.event_classify_step = 0.2
         self.event_detection_param = {"windowLen": 10, "rocof_sd_threshold": 0.025}
@@ -269,14 +270,25 @@ class client(object):
     def get_IDI_data(self):
         pass
     
-    def get_frequency_time(self, data_window, max_time, db):
-        data_frames = (db.query(DataFrame)
+    def get_frequency_time(self, data_window, max_time, db, upper_time_limit = None):
+        if upper_time_limit != None:
+            data_frames = (db.query(DataFrame)
+                            .filter(DataFrame.time >= max_time - timedelta(seconds=data_window), DataFrame.time <= upper_time_limit, DataFrame.identifier == self.cfg.identifier)
+                            .order_by(DataFrame.time.asc())
+                            .all())
+            # print(max_time - timedelta(seconds=data_window), upper_time_limit)
+        else:
+            data_frames = (db.query(DataFrame)
                             .filter(DataFrame.time >= max_time - timedelta(seconds=data_window), DataFrame.identifier == self.cfg.identifier)
                             .order_by(DataFrame.time.asc())
                             .all())
         stationNames = (db.query(ConfigurationFrame.stationname)
                        .filter(ConfigurationFrame.identifier == self.cfg.identifier)
                        .scalar())
+        if self.stationNames == None:
+            self.stationNames = stationNames
+        if len(data_frames) == 0:
+            return None
         res = {}
         res['pmus'] = []
         res['time'] = []
@@ -320,7 +332,6 @@ class client(object):
                 if self.db_data is None:
                     continue
                 left_index = bisect_left(self.db_data['time'], max_time - timedelta(seconds=self.eventWindowLens['islandingEvent']))
-                
                 data = {}
                 data['pmus'] = {}
                 data['time'] = self.db_data['time'][left_index: ]
@@ -351,14 +362,14 @@ class client(object):
                 for pmu in data['pmus']:
                     fault_data, isDetected = getFault(data['pmus'][pmu]['freq'], data['time'], self.event_detection_param['rocof_sd_threshold'])
                     if isDetected:
-                        curr_minTime_ptr = max(db.query(func.min(ConfigurationFrame.time)).filter(ConfigurationFrame.identifier == self.cfg.identifier).scalar(), min(data['time']) - timedelta(seconds=int(self.event_classify_buffer)))
+                        curr_minTime_ptr = max(db.query(func.min(DataFrame.time)).filter(DataFrame.identifier == self.cfg.identifier).scalar(), min(data['time']) - timedelta(seconds=int(self.event_classify_buffer)))
                         assert curr_minTime_ptr <= min(self.db_data['time']), "Time error"
                         curr_maxTime_ptr = max_time + timedelta(seconds=int(self.event_classify_buffer))
                         if not self.event_ptr[pmu]['minTime_ptr']:
                             self.event_ptr[pmu] = {
                                 'minTime_ptr': curr_minTime_ptr,
                                 'maxTime_ptr': curr_maxTime_ptr,
-                                'currTime_ptr': curr_minTime_ptr
+                                'currTime_ptr': curr_minTime_ptr, 
                             }
                         else:
                             if self.event_ptr[pmu]['maxTime_ptr'] >= curr_minTime_ptr:
@@ -376,8 +387,8 @@ class client(object):
                 db.close()
     
     def classify_events(self):
-        print("Started detecting and classifying events...")
         db = next(get_db())
+        test_min_time = None
         while True:
             try:
                 if self.interrupt_event.is_set():
@@ -388,27 +399,38 @@ class client(object):
                 if self.db_data is None:
                     time.sleep(0.2)
                     continue
-                
+                if self.event_ptr is None or len(self.event_ptr) == 0:
+                    time.sleep(0.2)
+                    continue
+
                 for i, pmu in enumerate(self.db_data['pmus']):
                     pmuName = pmu['stationname']
+                    curr_time = self.event_ptr[pmuName]['currTime_ptr']
                     if self.event_ptr[pmuName]["minTime_ptr"] is None:
                         time.sleep(0.2)
                         continue
                     if self.event_ptr[pmuName]['currTime_ptr'] > min(self.event_ptr[pmuName]['maxTime_ptr'], self.db_data['time'][-1]):
                         time.sleep(0.2)
                         continue
+
+                    data = db.query(DataFrame.frequency[i+1], DataFrame.time)\
+                                .filter(DataFrame.time >= curr_time - timedelta(seconds=25),
+                                        DataFrame.time <= curr_time, 
+                                        DataFrame.identifier == self.cfg.identifier)\
+                                .order_by(DataFrame.time.asc())\
+                                .all()
+                    
+                    data_freq = [d[0] for d in data]
+                    data_time = [d[1] for d in data]
+                    
                     faults = defaultdict(lambda: {})
                     eventsData = defaultdict(lambda: defaultdict(lambda: {'freq': [], 'time': []}))
-
                     for event in self.eventWindowLens.keys():
-                        assert self.event_ptr[pmuName]['currTime_ptr'] <= max(self.db_data['time']), self.event_ptr[pmuName]
+                        # assert curr_time <= max(self.db_data['time']), self.event_ptr[pmuName]
                         window_len = self.eventWindowLens[event]
-                        left_index = bisect_left(self.db_data['time'], self.event_ptr[pmuName]['currTime_ptr'] - timedelta(seconds=window_len))
-                        right_index = bisect_right(self.db_data['time'], self.event_ptr[pmuName]['currTime_ptr'])
-                        if left_index > right_index:
-                            right_index = left_index
-                        eventsData[event]['freq'] = self.db_data['pmus'][i]['frequency'][left_index: right_index]
-                        eventsData[event]['time'] = self.db_data['time'][left_index: right_index]
+                        left_index = bisect_left(data_time, curr_time - timedelta(seconds=window_len))
+                        eventsData[event]['freq'] = data_freq[left_index:]
+                        eventsData[event]['time'] = data_time[left_index: ]
                     
                     freq_data = eventsData['oscillatoryEvent']['freq']
                     time_data = eventsData['oscillatoryEvent']['time']
@@ -435,6 +457,8 @@ class client(object):
                         classifiedData, isFault = impulseEventClassification(freq_data, time_data, self.threshold_values['impulseEvent'])
                         res = []
                         if isFault:
+                            if test_min_time == None:
+                                test_min_time = time_data[0]
                             new_impulseEvent = ImpulseEvent(
                                 identifier = self.cfg.identifier,
                                 stationname = pmuName,
